@@ -34,7 +34,18 @@ This project is a normal service booking and operations platform. AI is an addit
 - [Performance Strategy](docs/performance.md)
 - [Responsible AI-Assisted Development](docs/responsible-ai-development.md)
 - [Milestone Plan](docs/milestones.md)
+- [Local Development](docs/local-development.md)
 
 ## Current Status
 
-Milestone 1 focuses on planning and documentation only. No user-facing application features have been implemented yet.
+Milestone 2 provides the engineering scaffold for the React frontend, Express API, shared package, local infrastructure, and CI. Authentication, booking functionality, and database models have not been implemented yet.
+
+## Local Validation
+
+```bash
+pnpm install
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
