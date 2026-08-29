@@ -2,7 +2,7 @@
 
 ## Milestone 1: Planning And Documentation
 
-Status: in progress for this documentation pass.
+Status: complete.
 
 Deliverables:
 
