@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+minimumReleaseAge: 0
 onlyBuiltDependencies:
   - esbuild
   - '@prisma/client'

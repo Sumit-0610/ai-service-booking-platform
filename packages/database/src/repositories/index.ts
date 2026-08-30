@@ -1,4 +1,5 @@
 import { catalogRepository } from './catalog-repository.js';
+import { userRepository } from './user-repository.js';
 
 /**
  * Aggregated data-access layer. Application services depend on this object;
@@ -6,6 +7,8 @@ import { catalogRepository } from './catalog-repository.js';
  */
 export const repositories = {
   catalog: catalogRepository,
+  users: userRepository,
 };
 
-export { catalogRepository };
+export { catalogRepository, userRepository };
+export type { CreateUserInput } from './user-repository.js';

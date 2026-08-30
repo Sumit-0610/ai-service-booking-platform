@@ -24,17 +24,21 @@ order
 
 Filtering should use explicit query parameters rather than unstructured ad hoc filters.
 
-Standard error shape:
+Standard error shape (implemented):
 
 ```json
 {
   "error": {
     "code": "VALIDATION_ERROR",
     "message": "Request validation failed",
-    "details": []
+    "details": [{ "path": "email", "message": "Invalid email address" }]
   }
 }
 ```
+
+Error codes in use: `VALIDATION_ERROR` (422), `INVALID_CREDENTIALS` (401),
+`UNAUTHENTICATED` (401), `FORBIDDEN` (403), `CSRF_ERROR` (403), `EMAIL_TAKEN`
+(409), `RATE_LIMITED` (429), `NOT_FOUND` (404), `INTERNAL` (500).
 
 ## Public Endpoints
 
@@ -52,21 +56,24 @@ Capabilities:
 - View service details.
 - Check available slots by service, date range, and location context where applicable.
 
-## Authentication Endpoints
+## Authentication Endpoints (implemented — Milestone 4)
 
 ```txt
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-POST /api/v1/auth/logout
-GET  /api/v1/auth/me
+POST /api/v1/auth/register   -> 201 { user }          (rate limited per IP)
+POST /api/v1/auth/login      -> 200 { user }          (rate limited per IP + email)
+POST /api/v1/auth/logout     -> 204                    (session + X-CSRF-Token required)
+GET  /api/v1/auth/me         -> 200 { user }           (session required)
 ```
 
-Responsibilities:
-
-- Register customers.
-- Authenticate users.
-- Clear sessions.
-- Return current user and role context.
+- `user` is `{ id, email, name, role }` — never the password hash.
+- Register and login set an `HttpOnly` session cookie (`aisbp.sid`) and a
+  readable CSRF cookie (`aisbp.csrf`). Clients must send `credentials: 'include'`
+  and echo the CSRF cookie in `X-CSRF-Token` on state-changing requests.
+- `register` creates a `customer`. Duplicate email → `409 EMAIL_TAKEN`.
+- `login` returns a single generic `401 INVALID_CREDENTIALS` for both unknown
+  email and wrong password.
+- See [Authentication Strategy](authentication.md) for session, CSRF, and
+  authorization details.
 
 ## Customer Endpoints
 

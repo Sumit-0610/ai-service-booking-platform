@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 3 (PostgreSQL + Prisma + domain schema) is in progress: the `@aisbp/database` package holds the Prisma schema for the nine core entities, the initial migration, a deterministic dev seed, and a repository-based data-access layer. Milestone 2 (project scaffold) is complete with CI green. Authentication, API endpoints, and frontend features are not implemented yet.
+Milestone 4 (authentication and authorization) is in progress: Argon2id password hashing, Redis-backed HttpOnly cookie sessions, CSRF protection, login rate limiting, reusable role/ownership middleware, and a minimal auth web UI. Milestones 1–3 are complete with CI green. Booking, catalogue, dashboard, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 
@@ -50,6 +50,9 @@ Requires Node.js 22 (>= 22.13.0) and pnpm 11 via Corepack.
 ```bash
 pnpm install
 docker compose up -d postgres redis
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+cp packages/database/.env.example packages/database/.env
 pnpm --filter @aisbp/database db:migrate:deploy
 pnpm --filter @aisbp/database db:seed
 pnpm format:check

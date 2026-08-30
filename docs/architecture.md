@@ -36,9 +36,15 @@ HTTP request
 
 ## Domain Modules
 
-The backend should be organized by domain boundary:
+Implemented so far: `auth` and `session` (Milestone 4), plus the
+`@aisbp/database` data-access layer (Milestone 3). The rest are planned.
+
+The backend is organized by domain boundary:
 
 - `auth`: registration, login, logout, current session, password handling.
+  Implemented at `apps/api/src/modules/auth`, with the Redis session
+  abstraction at `apps/api/src/modules/session` and reusable auth/authz
+  middleware at `apps/api/src/middleware`.
 - `users`: shared user profile behavior.
 - `addresses`: customer-owned service locations.
 - `service-catalog`: categories, services, search, filtering, sorting, pagination.

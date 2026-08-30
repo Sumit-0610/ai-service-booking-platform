@@ -9,21 +9,35 @@
 - Use transactions for multi-record business mutations.
 - Return safe errors to clients.
 
-## Authentication Security
+## Authentication Security (implemented — Milestone 4)
 
-- Store password hashes only, never plaintext passwords.
-- Use Argon2 or bcrypt with appropriate cost settings.
-- Store session identifiers in HTTP-only secure cookies.
-- Do not store tokens in localStorage.
-- Rate limit login and registration endpoints.
-- Invalidate sessions on logout.
+- Passwords hashed with Argon2id (`@node-rs/argon2`, m = 19 MiB, t = 2, p = 1);
+  plaintext is never stored or logged.
+- Sessions are server-side in Redis; the session id lives in an `HttpOnly`,
+  `SameSite=Lax` cookie (`Secure` in production). No token in JavaScript or
+  `localStorage`.
+- Session fixation: a fresh session id is minted on every login and register,
+  and any incoming session id is destroyed first.
+- Logout deletes the Redis session and clears the cookies; session expiry is a
+  Redis TTL, refreshed on activity (sliding).
+- CSRF: synchronizer token stored in the session and required in the
+  `X-CSRF-Token` header for state-changing, cookie-authenticated requests.
+- Brute force: fixed-window Redis rate limits on `/auth/login` (per IP and per
+  email) and `/auth/register` (per IP) → `429 RATE_LIMITED` with `Retry-After`.
+- User enumeration: `/auth/login` returns one generic `401` for unknown email or
+  wrong password and always runs an Argon2id verify to equalise timing.
+- The password hash is never included in any API response (checked by tests).
 
-## Authorization Security
+## Authorization Security (implemented — Milestone 4)
 
-- Role-based authorization must be enforced on backend routes.
-- Customer resource ownership must be checked server-side.
-- Technician endpoints must verify assignment before exposing booking details.
-- Operations endpoints must be unavailable to customer and technician roles.
+- `requireAuth`, `requireRole(...roles)`, and `requireResourceOwner(getOwnerId)`
+  middleware enforce access server-side; the frontend guards are UX only.
+- Customer resource ownership is checked server-side; a mismatch returns `404`,
+  not `403`, so resource existence is not revealed (IDOR defence).
+- Operations may act on any customer resource; customers and technicians cannot
+  reach operations routes.
+- Technician assignment checks will be layered on `requireResourceOwner` when
+  booking routes arrive.
 
 ## API Validation
 
@@ -58,11 +72,17 @@ Invalid requests should return a consistent validation error without reaching bu
 - Provide `.env.example` later with placeholder values only.
 - CI and deployment secrets should live in GitHub Actions or hosting provider secret stores.
 
-## Error Handling
+## Error Handling (implemented)
 
-- Do not expose stack traces in production responses.
-- Log internal errors server-side with correlation IDs where possible.
-- Return stable error codes that the frontend can handle.
+- One error envelope everywhere: `{ "error": { "code", "message", "details"? } }`.
+- Zod failures → `422 VALIDATION_ERROR` with per-field `details`. Unexpected
+  errors → generic `500 INTERNAL`; the real error is logged server-side, never
+  returned. No stack traces or provider errors reach the client.
+- Stable codes the frontend handles: `VALIDATION_ERROR`, `INVALID_CREDENTIALS`,
+  `UNAUTHENTICATED`, `FORBIDDEN`, `CSRF_ERROR`, `EMAIL_TAKEN`, `RATE_LIMITED`,
+  `NOT_FOUND`, `INTERNAL`.
+- The logger is a thin JSON console wrapper; passwords, session ids, cookies,
+  and raw auth request bodies are never passed to it.
 
 ## Dependency Security
 

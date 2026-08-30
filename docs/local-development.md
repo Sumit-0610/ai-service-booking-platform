@@ -45,6 +45,20 @@ pnpm --filter @aisbp/database db:seed
 
 See [Database](database.md) for the schema, constraints, and access layer.
 
+Every seeded account uses the password `aisbp-dev-password` (development only).
+Seeded logins:
+
+- `alice@example.com` / `bob@example.com` — customer
+- `olivia@ops.example.com` — operations
+- `tomas@tech.example.com` / `tara@tech.example.com` — technician
+
+## Redis
+
+The API needs Redis for sessions and login rate limiting. `REDIS_URL` is in
+`apps/api/.env.example`. The API integration tests use a dedicated logical DB
+(15) on the same server, so running `pnpm test` will not disturb your dev
+sessions.
+
 ## Run Applications
 
 Run both apps from the repository root:

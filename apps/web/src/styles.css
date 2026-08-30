@@ -74,3 +74,63 @@ h1 {
   border-color: #b9c9ef;
   color: #31518a;
 }
+
+.auth-shell {
+  margin: 0 auto;
+  max-width: 380px;
+  padding: 64px 24px;
+}
+
+.auth-shell h1 {
+  font-size: 1.75rem;
+  margin: 0 0 24px;
+}
+
+.auth-shell form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-shell label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.auth-shell input {
+  border: 1px solid #c8d0dc;
+  border-radius: 8px;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.auth-shell button {
+  background: #1f2a44;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  margin-top: 8px;
+  padding: 10px 14px;
+}
+
+.auth-shell button:disabled {
+  opacity: 0.6;
+}
+
+.auth-shell span[role='alert'] {
+  color: #963825;
+  font-size: 0.875rem;
+}
+
+.form-error {
+  background: #fff0ed;
+  border: 1px solid #efaa9d;
+  border-radius: 8px;
+  color: #963825;
+  padding: 10px 12px;
+}

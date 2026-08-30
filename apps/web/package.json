@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@aisbp/shared": "workspace:*",
+    "@hookform/resolvers": "^5.9.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-hook-form": "^7.87.0",
     "react-router-dom": "^7.8.2",
     "zod": "^4.1.5"
   },
@@ -21,6 +23,7 @@
     "@aisbp/config": "workspace:*",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.6",
     "@tailwindcss/vite": "^4.1.12",
     "@vitejs/plugin-react": "^5.0.2",
     "@types/react": "^19.1.12",

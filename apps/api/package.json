@@ -11,15 +11,20 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aisbp/database": "workspace:*",
     "@aisbp/shared": "workspace:*",
+    "@node-rs/argon2": "^2.2.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "ioredis": "^6.0.0",
     "zod": "^4.1.5"
   },
   "devDependencies": {
     "@aisbp/config": "workspace:*",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",

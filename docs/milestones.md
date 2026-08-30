@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 3: PostgreSQL + Prisma + domain schema — in progress.**
+**Milestone 4: Authentication and authorization — in progress.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
-validation from Milestone 3 on) and GitHub Actions CI are green on `origin/main`.
+validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestone 2 (project scaffold) is complete: CI green on `origin/main`.
+Milestones 1–3 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -37,7 +37,7 @@ No user-facing application features in this milestone.
 
 Stop for approval if scaffold tooling choices require changing the approved stack.
 
-### M3: PostgreSQL + Prisma + domain schema — in progress
+### M3: PostgreSQL + Prisma + domain schema — complete
 
 Prisma schema for the core entities, the initial migration, deterministic seed
 data, deliberate indexes and constraints, and a repository-based data-access
@@ -46,11 +46,14 @@ layer. Includes first-class booking price snapshot fields. See
 
 No authentication, API CRUD endpoints, or frontend features in this milestone.
 
-### M4: Authentication and authorization
+### M4: Authentication and authorization — in progress
 
 Register/login/logout/me endpoints, Argon2id password hashing, Redis-backed
-HTTP-only cookie sessions, CSRF protection, role middleware, and customer
-ownership checks.
+HttpOnly cookie sessions, CSRF protection, rate limiting, reusable
+`requireAuth` / `requireRole` / `requireResourceOwner` middleware, and a minimal
+login/register/logout web UI. See [Authentication Strategy](authentication.md).
+
+No booking, catalogue, dashboard, or AI features in this milestone.
 
 ### M5: Service catalogue
 

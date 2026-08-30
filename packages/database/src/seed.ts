@@ -7,11 +7,16 @@ import { Role } from '../generated/prisma/index.js';
  * are upserted by natural key, and availability is fully rebuilt each run.
  *
  * This data exists only to make local development and tests useful. It is not
- * production data and contains no real metrics or credentials. Password hashes
- * are placeholders; real authentication arrives in the authentication milestone.
+ * production data and contains no real metrics.
+ *
+ * Every seeded account has the SAME development password: `aisbp-dev-password`.
+ * The value below is a real Argon2id hash of that string, precomputed so this
+ * package needs no password-hashing dependency. It is a well-known dev
+ * credential, never a production secret.
  */
 
-const PLACEHOLDER_PASSWORD_HASH = 'seed-placeholder-not-a-real-hash';
+const DEV_PASSWORD_HASH =
+  '$argon2id$v=19$m=19456,t=2,p=1$H+d9YbwGkKYmAbw1BBZLGw$e4ByyrkYaWA34w1z+VpeyuBAo8paUH8PlE44y+LHVjA';
 
 const users = [
   {
@@ -241,7 +246,7 @@ async function main(): Promise<void> {
     for (const user of users) {
       await tx.user.upsert({
         where: { email: user.email },
-        create: { ...user, passwordHash: PLACEHOLDER_PASSWORD_HASH },
+        create: { ...user, passwordHash: DEV_PASSWORD_HASH },
         update: { name: user.name, role: user.role },
       });
     }
