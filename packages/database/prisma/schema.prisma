@@ -1,0 +1,209 @@
+// AI Service Booking Platform — database schema.
+//
+// Money is stored as integer minor units (cents) to avoid floating-point
+// rounding. All instant fields use `timestamptz` so scheduling math is
+// timezone-safe. Every booking keeps its own price snapshot so historical
+// bookings never change when a Service is repriced.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Application role. Drives authorization in later milestones.
+enum Role {
+  customer
+  operations
+  technician
+}
+
+/// Booking lifecycle state. Transitions are enforced by the booking service
+/// (later milestone) and every change is recorded in BookingStatusHistory.
+enum BookingStatus {
+  pending
+  confirmed
+  assigned
+  in_progress
+  completed
+  cancelled
+  rejected
+}
+
+/// Availability slot state.
+enum AvailabilitySlotStatus {
+  available
+  held
+  booked
+  unavailable
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  addresses         Address[]
+  technicianProfile Technician?
+  bookings          Booking[]              @relation("CustomerBookings")
+  statusChanges     BookingStatusHistory[] @relation("StatusChangedBy")
+
+  @@index([role])
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  label      String
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  postalCode String
+  country    String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([userId])
+}
+
+model ServiceCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  services Service[]
+
+  @@index([active])
+}
+
+model Service {
+  id                       String   @id @default(cuid())
+  categoryId               String
+  name                     String
+  slug                     String   @unique
+  description              String
+  /// Current list price in minor units (e.g. cents). Snapshotted onto Booking.
+  basePriceCents           Int
+  currency                 String   @default("USD")
+  estimatedDurationMinutes Int
+  active                   Boolean  @default(true)
+  createdAt                DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime @updatedAt @db.Timestamptz(3)
+
+  category ServiceCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slots    AvailabilitySlot[]
+  bookings Booking[]
+
+  @@index([categoryId])
+  @@index([active])
+}
+
+model Technician {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  displayName String
+  serviceArea String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slots    AvailabilitySlot[]
+  bookings Booking[]
+
+  @@index([active])
+}
+
+model AvailabilitySlot {
+  id           String                 @id @default(cuid())
+  technicianId String
+  serviceId    String
+  startsAt     DateTime               @db.Timestamptz(3)
+  endsAt       DateTime               @db.Timestamptz(3)
+  status       AvailabilitySlotStatus @default(available)
+  createdAt    DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime               @updatedAt @db.Timestamptz(3)
+
+  technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  booking    Booking?
+
+  // Exact-duplicate guard. Overlap prevention is enforced by an exclusion
+  // constraint added in the initial migration (see migration.sql).
+  @@unique([technicianId, serviceId, startsAt])
+  @@index([technicianId, startsAt])
+  @@index([serviceId, startsAt])
+  @@index([status, startsAt])
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  customerId     String
+  addressId      String
+  serviceId      String
+  technicianId   String?
+  slotId         String        @unique
+  status         BookingStatus @default(pending)
+  scheduledStart DateTime      @db.Timestamptz(3)
+  scheduledEnd   DateTime      @db.Timestamptz(3)
+  customerNotes  String?
+
+  // --- Price snapshot: captured at booking time, never recomputed ---
+  priceCurrency           String
+  priceSubtotalCents      Int
+  priceFeesTotalCents     Int  @default(0)
+  priceDiscountTotalCents Int  @default(0)
+  priceTaxTotalCents      Int  @default(0)
+  priceTotalCents         Int
+  /// Structured line items for display, e.g.
+  /// { "lines": [{ "label": "Washing machine installation", "amountCents": 8900 }] }
+  priceBreakdown          Json
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  customer      User                   @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Restrict)
+  address       Address                @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  service       Service                @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  technician    Technician?            @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  slot          AvailabilitySlot       @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  statusHistory BookingStatusHistory[]
+
+  @@index([customerId, createdAt])
+  @@index([technicianId, scheduledStart])
+  @@index([serviceId])
+  @@index([status])
+  @@index([scheduledStart])
+}
+
+model BookingStatusHistory {
+  id              String         @id @default(cuid())
+  bookingId       String
+  fromStatus      BookingStatus?
+  toStatus        BookingStatus
+  changedByUserId String?
+  reason          String?
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  changedBy User?   @relation("StatusChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId, createdAt])
+  @@index([changedByUserId])
+}

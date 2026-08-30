@@ -19,6 +19,7 @@ Copy the example files before running apps locally:
 ```bash
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
+cp packages/database/.env.example packages/database/.env
 ```
 
 The example values are local placeholders only. Do not commit real secrets.
@@ -30,6 +31,19 @@ docker compose up -d postgres redis
 ```
 
 PostgreSQL listens on `localhost:5432` and Redis listens on `localhost:6379`.
+
+## Set Up the Database
+
+Apply migrations and load deterministic development data:
+
+```bash
+pnpm --filter @aisbp/database db:migrate:deploy
+pnpm --filter @aisbp/database db:seed
+```
+
+`pnpm --filter @aisbp/database db:reset` drops, re-migrates, and re-seeds.
+
+See [Database](database.md) for the schema, constraints, and access layer.
 
 ## Run Applications
 
@@ -54,14 +68,18 @@ Default URLs:
 
 ## Validation
 
-Run the full local validation suite:
+Run the full local validation suite (PostgreSQL must be running and the
+database migrated and seeded — the integration tests use it):
 
 ```bash
 pnpm format:check
 pnpm lint
 pnpm typecheck
+pnpm --filter @aisbp/database db:validate
 pnpm test
 pnpm build
 ```
 
 These are the same checks GitHub Actions runs on every push and pull request.
+CI applies the migration and seed against a fresh PostgreSQL container before
+running the tests.

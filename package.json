@@ -8,12 +8,14 @@
   },
   "scripts": {
     "dev": "pnpm --filter @aisbp/api --filter @aisbp/web --parallel dev",
-    "build": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web build",
-    "lint": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web lint",
-    "typecheck": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web typecheck",
-    "test": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web test",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
     "format:check": "prettier --check .",
-    "format:write": "prettier --write ."
+    "format:write": "prettier --write .",
+    "db:migrate:deploy": "pnpm --filter @aisbp/database db:migrate:deploy",
+    "db:seed": "pnpm --filter @aisbp/database db:seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.34.0",

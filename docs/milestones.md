@@ -5,11 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 2: Project scaffold — in progress.**
+**Milestone 3: PostgreSQL + Prisma + domain schema — in progress.**
 
-Milestone 2 is not complete until the full validation suite (`format:check`,
-`lint`, `typecheck`, `test`, `build`) and GitHub Actions CI are green on
-`origin/main`.
+A milestone is not complete until the full validation suite (`format:check`,
+`lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
+validation from Milestone 3 on) and GitHub Actions CI are green on `origin/main`.
+
+Milestone 2 (project scaffold) is complete: CI green on `origin/main`.
 
 ## Milestones
 
@@ -21,7 +23,7 @@ performance strategy, and responsible AI-assisted development guidance.
 
 No user-facing application features in this milestone.
 
-### M2: Project scaffold — in progress
+### M2: Project scaffold — complete
 
 - pnpm monorepo workspace (`apps/*`, `packages/*`)
 - `apps/web` (Vite + React + TypeScript) and `apps/api` (Express + TypeScript)
@@ -35,11 +37,14 @@ No user-facing application features in this milestone.
 
 Stop for approval if scaffold tooling choices require changing the approved stack.
 
-### M3: PostgreSQL + Prisma + domain schema
+### M3: PostgreSQL + Prisma + domain schema — in progress
 
-Prisma schema for the core entities, migrations, seed data, deliberate indexes,
-and documented transaction patterns. Includes first-class booking price snapshot
-fields.
+Prisma schema for the core entities, the initial migration, deterministic seed
+data, deliberate indexes and constraints, and a repository-based data-access
+layer. Includes first-class booking price snapshot fields. See
+[Database](database.md).
+
+No authentication, API CRUD endpoints, or frontend features in this milestone.
 
 ### M4: Authentication and authorization
 

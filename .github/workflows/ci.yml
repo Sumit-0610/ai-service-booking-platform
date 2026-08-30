@@ -10,6 +10,24 @@ jobs:
   validate:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ai_service_booking_platform
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d ai_service_booking_platform"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://app:app_password@localhost:5432/ai_service_booking_platform
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +52,15 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @aisbp/database db:validate
+
+      - name: Apply migrations to a clean database
+        run: pnpm --filter @aisbp/database db:migrate:deploy
+
+      - name: Seed the database
+        run: pnpm --filter @aisbp/database db:seed
 
       - name: Test
         run: pnpm test

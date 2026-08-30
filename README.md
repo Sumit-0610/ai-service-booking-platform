@@ -26,6 +26,7 @@ This project is a normal service booking and operations platform. AI is an addit
 - [Architecture](docs/architecture.md)
 - [Repository Structure](docs/repository-structure.md)
 - [Domain Model And Database Design](docs/domain-model.md)
+- [Database](docs/database.md)
 - [API Boundaries](docs/api.md)
 - [Authentication Strategy](docs/authentication.md)
 - [Security Strategy](docs/security.md)
@@ -38,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 2 (project scaffold) is in progress. It provides the engineering scaffold for the React frontend, Express API, shared package, local infrastructure, and CI. It is not considered complete until the full validation suite and GitHub Actions CI are green. Authentication, booking functionality, and database models have not been implemented yet.
+Milestone 3 (PostgreSQL + Prisma + domain schema) is in progress: the `@aisbp/database` package holds the Prisma schema for the nine core entities, the initial migration, a deterministic dev seed, and a repository-based data-access layer. Milestone 2 (project scaffold) is complete with CI green. Authentication, API endpoints, and frontend features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 
@@ -48,6 +49,9 @@ Requires Node.js 22 (>= 22.13.0) and pnpm 11 via Corepack.
 
 ```bash
 pnpm install
+docker compose up -d postgres redis
+pnpm --filter @aisbp/database db:migrate:deploy
+pnpm --filter @aisbp/database db:seed
 pnpm format:check
 pnpm lint
 pnpm typecheck
