@@ -2,7 +2,12 @@
 
 ## Positioning
 
-This project is built with Codex as the primary coding assistant, but engineering ownership remains human-led. AI-generated code must be reviewed, tested, and validated before it is treated as production-quality work.
+This project is built with AI coding assistants, but engineering ownership remains human-led. AI-generated code must be reviewed, tested, and validated before it is treated as production-quality work.
+
+Coding agents used on this project:
+
+- Current primary coding agent: Claude (Anthropic).
+- Previous coding agent: Codex, which produced the Milestone 1 planning documentation and the initial Milestone 2 scaffold.
 
 Do not claim that AI generated the entire project without engineering oversight.
 

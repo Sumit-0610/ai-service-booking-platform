@@ -38,12 +38,17 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 2 provides the engineering scaffold for the React frontend, Express API, shared package, local infrastructure, and CI. Authentication, booking functionality, and database models have not been implemented yet.
+Milestone 2 (project scaffold) is in progress. It provides the engineering scaffold for the React frontend, Express API, shared package, local infrastructure, and CI. It is not considered complete until the full validation suite and GitHub Actions CI are green. Authentication, booking functionality, and database models have not been implemented yet.
+
+See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 
 ## Local Validation
 
+Requires Node.js 22 (>= 22.13.0) and pnpm 11 via Corepack.
+
 ```bash
 pnpm install
+pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test

@@ -7,11 +7,11 @@ services:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app_password
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d ai_service_booking_platform"]
+      test: ['CMD-SHELL', 'pg_isready -U app -d ai_service_booking_platform']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,9 +20,9 @@ services:
     image: redis:7-alpine
     container_name: aisbp-redis
     ports:
-      - "6379:6379"
+      - '6379:6379'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5

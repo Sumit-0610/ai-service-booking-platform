@@ -1,147 +1,127 @@
 # Milestone Plan
 
-## Milestone 1: Planning And Documentation
+This is the single canonical milestone numbering for the project. Any other
+numbering in older notes is superseded by this list.
 
-Status: complete.
+## Current Milestone
 
-Deliverables:
+**Milestone 2: Project scaffold — in progress.**
 
-- architecture documentation
-- repository structure documentation
-- domain and database model documentation
-- API boundary documentation
-- authentication and security strategy
-- AI architecture documentation
-- testing strategy
-- performance strategy
-- responsible AI-assisted development guidance
+Milestone 2 is not complete until the full validation suite (`format:check`,
+`lint`, `typecheck`, `test`, `build`) and GitHub Actions CI are green on
+`origin/main`.
 
-No user-facing application features should be implemented in this milestone.
+## Milestones
 
-## Milestone 2: Repository Scaffold
+### M1: Planning and documentation — complete
 
-Deliverables:
+Architecture, repository structure, domain and database model, API boundaries,
+authentication and security strategy, AI architecture, testing strategy,
+performance strategy, and responsible AI-assisted development guidance.
 
-- monorepo workspace setup
-- frontend and backend app folders
-- shared package folders
-- TypeScript configuration
-- linting and formatting
+No user-facing application features in this milestone.
+
+### M2: Project scaffold — in progress
+
+- pnpm monorepo workspace (`apps/*`, `packages/*`)
+- `apps/web` (Vite + React + TypeScript) and `apps/api` (Express + TypeScript)
+- `packages/shared` and `packages/config`
+- strict TypeScript, ESLint, Prettier
+- environment variable validation with placeholder-only examples
+- Express bootstrap with `/api/v1/health`
+- frontend-to-API connectivity check
 - Docker Compose for PostgreSQL and Redis
-- GitHub Actions validation skeleton
-- environment variable examples with placeholder values only
+- GitHub Actions CI running format check, lint, typecheck, test, and build
 
 Stop for approval if scaffold tooling choices require changing the approved stack.
 
-## Milestone 3: Backend Foundation
+### M3: PostgreSQL + Prisma + domain schema
 
-Deliverables:
+Prisma schema for the core entities, migrations, seed data, deliberate indexes,
+and documented transaction patterns. Includes first-class booking price snapshot
+fields.
 
-- Express application bootstrap
-- versioned API routing
-- config validation
-- centralized errors
-- request validation helpers
-- logging foundation
-- health endpoint
+### M4: Authentication and authorization
 
-No booking business features yet beyond structural foundation.
+Register/login/logout/me endpoints, Argon2id password hashing, Redis-backed
+HTTP-only cookie sessions, CSRF protection, role middleware, and customer
+ownership checks.
 
-## Milestone 4: Database Foundation
+### M5: Service catalogue
 
-Deliverables:
+Service categories and services, with the read/detail endpoints.
 
-- Prisma schema for core entities
-- migrations
-- seed data
-- database indexes
-- transaction patterns documented in code where needed
+### M6: Address management
 
-Include first-class booking price snapshot fields.
+Customer-owned service locations: list, create, update, delete, with ownership
+enforcement.
 
-## Milestone 5: Authentication And Authorization
+### M7: Availability and scheduling
 
-Deliverables:
+Technician availability slots, availability lookup, and scheduling checks.
 
-- register/login/logout/me endpoints
-- secure password hashing
-- HTTP-only cookie sessions
-- Redis-backed sessions if selected during implementation
-- role middleware
-- customer ownership checks
+### M8: Pricing
 
-## Milestone 6: Service Catalogue And Addresses
+Simple MVP pricing service and pricing breakdown response. A booking stores the
+final agreed price and breakdown at booking time; later service price changes do
+not affect historical bookings.
 
-Deliverables:
+### M9: Booking workflow
 
-- service categories
-- services
-- search, filtering, sorting, pagination
-- customer address management
+Create, modify, and cancel bookings; booking history; booking status timeline;
+transaction-safe slot reservation; stored booking price snapshot; state machine
+enforcement.
 
-## Milestone 7: Availability And Pricing
+### M10: Operations dashboard
 
-Deliverables:
+Operations dashboard, booking detail view, and operational analytics using real
+stored data only.
 
-- technician availability slots
-- availability lookup
-- simple pricing service
-- pricing breakdown response
-- tests for price snapshot behavior
+### M11: Technician management and assignment
 
-No complex pricing rules engine unless a concrete requirement is introduced.
+Technician profiles and active status, technician assignment to bookings, and
+technician job-status/completion flow.
 
-## Milestone 8: Booking Lifecycle
+### M12: Search, filtering, pagination, and performance
 
-Deliverables:
+Consistent search, filtering, sorting, and pagination across list endpoints,
+with measured performance work.
 
-- create booking
-- modify booking
-- cancel booking
-- booking history
-- booking status timeline
-- transaction-safe slot reservation
-- stored booking price snapshot
+### M13: Redis caching
 
-## Milestone 9: Operations Workflows
+Deliberate caching of hot, non-sensitive read paths. Redis is never a second
+source of truth for booking or availability state.
 
-Deliverables:
+### M14: Claude AI Booking Assistant
 
-- operations dashboard
-- booking search/filter/sort
-- booking detail view
-- technician management
-- technician assignment
-- operational analytics using real stored data only
+Claude API backend integration, structured intent extraction, schema validation,
+clarification questions, service discovery, and availability assistance. Claude
+never mutates booking or database state directly.
 
-## Milestone 10: Technician Workflows
+### M15: Unit, integration, and E2E testing
 
-Deliverables:
+Vitest unit and integration coverage, React Testing Library component coverage,
+and Playwright end-to-end journeys.
 
-- assigned booking list
-- booking detail view
-- job status updates
-- completion flow
+### M16: Security and performance review
 
-## Milestone 11: AI Booking Assistant
+Security review of auth, authorization, and AI boundaries; performance
+measurement of core endpoints and the frontend bundle.
 
-Deliverables:
+### M17: Docker and CI/CD
 
-- Claude API backend integration
-- structured intent extraction
-- schema validation
-- clarification questions
-- service discovery assistance
-- availability assistance
-- booking preparation through normal services only
+Application Docker images, CI hardening, and pipeline coverage for the full test
+suite including E2E smoke tests.
 
-## Milestone 12: Quality, Deployment, And Polish
+### M18: Deployment
 
-Deliverables:
+Deployment configuration and documentation.
 
-- Playwright E2E coverage
-- accessibility pass
-- performance checks
-- CI hardening
-- deployment documentation
-- final portfolio README
+### M19: README and GitHub portfolio polish
+
+Final portfolio README, screenshots, and repository presentation.
+
+## Development Rule
+
+Complete one milestone, validate it, and stop. Do not jump across multiple
+milestones in a single change.

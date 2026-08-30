@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "pnpm --filter @aisbp/api --filter @aisbp/web --parallel dev",
     "build": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web build",
     "lint": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web lint",
     "typecheck": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web typecheck",
     "test": "pnpm --filter @aisbp/shared --filter @aisbp/api --filter @aisbp/web test",
-    "format": "prettier --check .",
+    "format:check": "prettier --check .",
     "format:write": "prettier --write ."
   },
   "devDependencies": {

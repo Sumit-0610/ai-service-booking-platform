@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- Node.js 20
-- pnpm 11
+- Node.js 22 (minimum 22.13.0, as required by pnpm 11.19)
+- pnpm 11 (managed via Corepack; the version is pinned in `package.json`)
 - Docker
 
 ## Install Dependencies
@@ -57,8 +57,11 @@ Default URLs:
 Run the full local validation suite:
 
 ```bash
+pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+These are the same checks GitHub Actions runs on every push and pull request.
