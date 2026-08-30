@@ -6,6 +6,9 @@ const redisBase = (process.env.REDIS_URL ?? 'redis://localhost:6379').replace(/\
 
 export default defineConfig({
   test: {
+    // The integration suites share one PostgreSQL database and one Redis DB and
+    // reset them between tests, so test files must not run concurrently.
+    fileParallelism: false,
     env: {
       NODE_ENV: 'test',
       REDIS_URL: `${redisBase}/15`,

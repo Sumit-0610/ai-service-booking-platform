@@ -74,20 +74,7 @@ jobs:
         run: pnpm --filter @aisbp/database db:seed
 
       - name: Test
-        run: |
-          set -o pipefail
-          pnpm test 2>&1 | tee /tmp/test.log
-
-      - name: Surface test failure
-        if: failure()
-        run: |
-          {
-            echo '### Test failure output'
-            echo '```'
-            tail -c 12000 /tmp/test.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error::$(grep -aE 'FAIL |⎯|AssertionError|Error:|expected|Timeout|ECONNREFUSED|Cannot find|is not a function' /tmp/test.log | tail -20 | tr '\n' ' ' | cut -c1-3500)"
+        run: pnpm test
 
       - name: Build
         run: pnpm build
