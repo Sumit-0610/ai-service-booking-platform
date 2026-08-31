@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 10: Operations dashboard — in progress.**
+**Milestone 11: Technician management and assignment — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–9 are complete with CI green on `origin/main`.
+Milestones 1–10 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -118,7 +118,7 @@ No booking modification / reschedule, operations confirmation / assignment,
 technician job-status flow, payments, notifications, refunds, coupons, reviews,
 or AI in this milestone.
 
-### M10: Operations dashboard — in progress
+### M10: Operations dashboard — complete
 
 Operations-only (`requireRole('operations')`) read-and-triage surface:
 `GET /api/v1/operations/dashboard` (booking counts by status, active / upcoming,
