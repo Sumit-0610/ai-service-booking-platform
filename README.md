@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 5 (service catalogue) is in progress: public `GET /api/v1/categories` and `GET /api/v1/services` (search, category filter, sort, pagination) and `GET /api/v1/services/:slug`, plus a responsive customer-facing catalogue UI with a service detail page. Milestones 1–4 are complete with CI green. Availability, booking, dashboard, and AI features are not implemented yet.
+Milestone 6 (address management) is in progress: authenticated customer CRUD for addresses (`/api/v1/addresses`) with server-side per-row ownership, Zod validation, referential-safe deletion, and a focused address-management UI. Milestones 1–5 are complete with CI green. Availability, booking, dashboard, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

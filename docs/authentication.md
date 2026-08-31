@@ -77,6 +77,11 @@ Middleware in `apps/api/src/middleware`, reusable by every future route:
 Roles: `customer`, `operations`, `technician` (shared `roleSchema`, kept in sync
 with the Prisma `Role` enum by a contract test).
 
+The customer address endpoints (`/api/v1/addresses`, Milestone 6) use
+`requireAuth` + `requireRole('customer')` and enforce per-row ownership in the
+repository. Operations and technicians are not granted access to customer
+addresses in this milestone.
+
 ## Brute-force protection
 
 Fixed-window Redis counters:

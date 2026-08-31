@@ -134,6 +134,25 @@ The public catalogue queries filter on `Service.active` (always), optionally joi
 
 No migration was needed for Milestone 5.
 
+### Address management (Milestone 6)
+
+- **No schema change, no migration.** The existing `Address` model
+  (`label, line1, line2?, city, state, postalCode, country` + `userId`,
+  timestamps) is sufficient.
+- **No `isDefault` / default-address concept.** It does not exist in the schema
+  and is not required to build the booking workflow — a booking will reference
+  an address the customer picks. Adding a "default" would mean a new column plus
+  a "exactly one default per user" invariant for no MVP benefit. Deferred.
+- **No recipient-name / phone fields.** Not in the approved model; not added.
+  If the booking workflow needs an on-site contact, that is a deliberate
+  decision in that milestone with its own migration.
+- **Index review**: the customer address list is
+  `where: { userId }` ordered by `createdAt`. The existing `Address(userId)`
+  index covers it, and a customer's list is expected to be tiny. No new index.
+- **Deletion**: `Booking.address` is `onDelete: Restrict`, so PostgreSQL refuses
+  to delete an address a booking still references; the API surfaces this as
+  `409 CONFLICT`. Historical booking records keep their address.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created
@@ -182,7 +201,8 @@ pnpm --filter @aisbp/database db:seed
 ```
 
 Deterministic and safe to re-run. It creates: five users (two customers, one
-operations, two technicians), two customer addresses, three service categories,
+operations, two technicians), three customer addresses (Indian demo data),
+three service categories,
 fourteen services (thirteen active plus one inactive, to exercise catalogue
 filtering), two technicians, and one week of upcoming, non-overlapping
 availability slots. Every seeded account has the development password

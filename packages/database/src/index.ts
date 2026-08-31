@@ -1,7 +1,15 @@
 export { connectDatabase, disconnectDatabase } from './client.js';
-export { repositories, catalogRepository, userRepository } from './repositories/index.js';
+export {
+  repositories,
+  addressRepository,
+  catalogRepository,
+  userRepository,
+} from './repositories/index.js';
 export type {
   CreateUserInput,
+  AddressRow,
+  AddressWriteInput,
+  AddressUpdateInput,
   CatalogueCategoryRow,
   CatalogueServiceRow,
   CatalogueSortRow,

@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 5: Service catalogue — in progress.**
+**Milestone 6: Address management — in progress.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–4 are complete with CI green on `origin/main`.
+Milestones 1–5 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -55,7 +55,7 @@ login/register/logout web UI. See [Authentication Strategy](authentication.md).
 
 No booking, catalogue, dashboard, or AI features in this milestone.
 
-### M5: Service catalogue — in progress
+### M5: Service catalogue — complete
 
 Public read-only catalogue: `GET /api/v1/categories`, `GET /api/v1/services`
 (search / category filter / sort / pagination), `GET /api/v1/services/:slug`,
@@ -64,10 +64,14 @@ and a responsive customer-facing catalogue UI. Active data only. See
 
 No availability, booking, dashboard, or AI work in this milestone.
 
-### M6: Address management
+### M6: Address management — in progress
 
-Customer-owned service locations: list, create, update, delete, with ownership
-enforcement.
+Authenticated customer CRUD for `Address` (`/api/v1/addresses`): server-side
+per-row ownership, Zod validation, international model, referential-safe delete,
+and a focused address-management UI. Customer role only. No schema change. See
+[API Boundaries](api.md) and [Security Strategy](security.md).
+
+No availability, scheduling, pricing, or booking work in this milestone.
 
 ### M7: Availability and scheduling
 

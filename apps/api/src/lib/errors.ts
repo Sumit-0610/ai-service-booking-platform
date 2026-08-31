@@ -7,6 +7,7 @@ export type ApiErrorCode =
   | 'EMAIL_TAKEN'
   | 'RATE_LIMITED'
   | 'NOT_FOUND'
+  | 'CONFLICT'
   | 'INTERNAL';
 
 const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
@@ -18,6 +19,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   EMAIL_TAKEN: 409,
   RATE_LIMITED: 429,
   NOT_FOUND: 404,
+  CONFLICT: 409,
   INTERNAL: 500,
 };
 

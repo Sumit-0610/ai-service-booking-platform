@@ -5,6 +5,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import { addressRouter } from './modules/addresses/address-routes.js';
 import { authRouter } from './modules/auth/auth-routes.js';
 import { catalogueRouter } from './modules/catalogue/catalogue-routes.js';
 
@@ -37,6 +38,7 @@ export function createApp() {
   });
 
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/addresses', addressRouter);
   app.use('/api/v1', catalogueRouter);
 
   app.use(notFoundHandler);

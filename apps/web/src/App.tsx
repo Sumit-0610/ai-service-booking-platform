@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { SiteHeader } from './components/SiteHeader';
+import { AddressesPage } from './features/addresses/AddressesPage';
 import { AccountPage } from './features/auth/AccountPage';
 import { AuthProvider } from './features/auth/AuthProvider';
 import { LoginPage } from './features/auth/LoginPage';
@@ -26,6 +27,14 @@ export function App(): ReactElement {
               element={
                 <ProtectedRoute>
                   <AccountPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/account/addresses"
+              element={
+                <ProtectedRoute roles={['customer']}>
+                  <AddressesPage />
                 </ProtectedRoute>
               }
             />

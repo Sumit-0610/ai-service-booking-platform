@@ -1,3 +1,4 @@
+import { addressRepository } from './address-repository.js';
 import { catalogRepository } from './catalog-repository.js';
 import { userRepository } from './user-repository.js';
 
@@ -6,12 +7,14 @@ import { userRepository } from './user-repository.js';
  * they never import Prisma or the generated client directly.
  */
 export const repositories = {
+  addresses: addressRepository,
   catalog: catalogRepository,
   users: userRepository,
 };
 
-export { catalogRepository, userRepository };
+export { addressRepository, catalogRepository, userRepository };
 export type { CreateUserInput } from './user-repository.js';
+export type { AddressRow, AddressWriteInput, AddressUpdateInput } from './address-repository.js';
 export type {
   CatalogueCategoryRow,
   CatalogueServiceRow,

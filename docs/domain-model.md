@@ -47,8 +47,16 @@ Important fields:
 
 Relationships:
 
-- many addresses belong to one customer user
-- bookings reference the address used at booking time
+- many addresses belong to one customer user (cascade-deleted with the user)
+- bookings reference the address used at booking time (`onDelete: Restrict` —
+  an address in use by a booking cannot be deleted)
+
+Notes (Milestone 6):
+
+- The model is international. `postalCode` has no country-specific format check;
+  `country` is an ISO 3166-1 alpha-2 code.
+- There is no default-address flag and no recipient-name / phone field. Neither
+  is required by the booking workflow; see [Database](database.md).
 
 ### ServiceCategory
 

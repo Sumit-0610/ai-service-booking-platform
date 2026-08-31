@@ -39,6 +39,25 @@
 - Technician assignment checks will be layered on `requireResourceOwner` when
   booking routes arrive.
 
+## Address Management Security (implemented — Milestone 6)
+
+- Address routes require `requireAuth` + `requireRole('customer')`. Operations
+  and technicians have no access (`403`). Mutations also require a CSRF token.
+- Ownership is enforced in the repository: every query, update and delete
+  carries `where: { id, userId }`. There is no code path that touches an address
+  without a matching user id.
+- **IDOR**: reading, updating or deleting another customer's address returns the
+  same `404 NOT_FOUND` as a non-existent address — existence is never revealed.
+- **Mass assignment**: request bodies are `.strict()` Zod objects; only the
+  seven address fields are accepted and only those are written. `userId`, `id`,
+  `isDefault` and any other key are rejected with `422`.
+- **Malformed identifiers**: `:id` is validated against `[A-Za-z0-9-]{8,64}`;
+  anything else is `422` before any query runs. Path-traversal segments never
+  reach the handler (Express normalises the path first).
+- **Sensitive data**: the DTO omits `userId` and timestamps.
+- **Referential integrity**: an address referenced by a booking cannot be
+  deleted (`409 CONFLICT`), so historical booking records keep their address.
+
 ## API Validation
 
 Use Zod schemas for:

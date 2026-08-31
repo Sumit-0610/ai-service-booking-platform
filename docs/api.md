@@ -37,7 +37,8 @@ Standard error shape (implemented):
 
 Error codes in use: `VALIDATION_ERROR` (422), `INVALID_CREDENTIALS` (401),
 `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `CSRF_ERROR` (403), `EMAIL_TAKEN`
-(409), `RATE_LIMITED` (429), `NOT_FOUND` (404), `INTERNAL` (500).
+(409), `RATE_LIMITED` (429), `NOT_FOUND` (404), `CONFLICT` (409),
+`INTERNAL` (500).
 
 ## Public Catalogue Endpoints (implemented — Milestone 5)
 
@@ -95,14 +96,50 @@ GET  /api/v1/auth/me         -> 200 { user }           (session required)
 - See [Authentication Strategy](authentication.md) for session, CSRF, and
   authorization details.
 
-## Customer Endpoints
+## Customer Address Endpoints (implemented — Milestone 6)
+
+Authenticated, **customer role only**. Operations and technicians get `403`.
+Every request is scoped to the caller's own user id.
 
 ```txt
-GET    /api/v1/addresses
-POST   /api/v1/addresses
-PATCH  /api/v1/addresses/:addressId
-DELETE /api/v1/addresses/:addressId
+GET    /api/v1/addresses          -> 200 { items: Address[] }
+POST   /api/v1/addresses          -> 201 { address }        (X-CSRF-Token)
+GET    /api/v1/addresses/:id      -> 200 { address } | 404
+PATCH  /api/v1/addresses/:id      -> 200 { address } | 404   (X-CSRF-Token)
+DELETE /api/v1/addresses/:id      -> 204 | 404 | 409         (X-CSRF-Token)
 ```
+
+`Address` = `{ id, label, line1, line2: string | null, city, state, postalCode, country }`.
+`userId` and timestamps are never returned.
+
+**Body fields** (create requires all except `line2`; PATCH is a partial update and
+rejects an empty body):
+
+| Field        | Rule                                                                             |
+| ------------ | -------------------------------------------------------------------------------- |
+| `label`      | trimmed, 1–60 chars                                                              |
+| `line1`      | trimmed, 1–120 chars                                                             |
+| `line2`      | trimmed, ≤ 120 chars; empty/blank stored as `null`                               |
+| `city`       | trimmed, 1–80 chars                                                              |
+| `state`      | trimmed, 1–80 chars (state / province / region — required by the model)          |
+| `postalCode` | trimmed, 1–16 chars, `[A-Za-z0-9 -]` only — **no country-specific format check** |
+| `country`    | ISO 3166-1 alpha-2, uppercased (e.g. `IN`)                                       |
+
+Only these fields are persisted. Any other key in the body → `422` (`.strict()`),
+so `userId`, `id`, `isDefault`, etc. cannot be mass-assigned.
+
+**Errors**: unauthenticated → `401`; wrong role → `403 FORBIDDEN`; missing/blank
+CSRF token on a mutation → `403 CSRF_ERROR`; invalid body → `422`; malformed
+`:id` (not `[A-Za-z0-9-]{8,64}`) → `422`; **an address that does not exist _or_
+belongs to another customer** → `404 NOT_FOUND` (identical, so ownership is not
+revealed); deleting an address still referenced by a booking →
+`409 CONFLICT` (the `Booking.address` FK is `onDelete: Restrict`, so historical
+bookings keep their address).
+
+Normalization is limited to trimming, `line2` empty → `null`, and `country`
+uppercasing. Casing of every other field is preserved as entered.
+
+## Booking Endpoints (later milestones)
 
 ```txt
 GET    /api/v1/bookings

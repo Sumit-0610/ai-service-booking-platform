@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 
 export function AccountPage(): ReactElement {
@@ -34,6 +34,17 @@ export function AccountPage(): ReactElement {
           <dd className="font-medium text-slate-900">{user?.role}</dd>
         </div>
       </dl>
+
+      {user?.role === 'customer' ? (
+        <Link
+          to="/account/addresses"
+          className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
+        >
+          Your addresses
+          <span aria-hidden="true">→</span>
+        </Link>
+      ) : null}
+
       <button
         type="button"
         onClick={onLogout}
