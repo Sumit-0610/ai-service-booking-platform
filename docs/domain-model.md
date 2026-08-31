@@ -286,6 +286,18 @@ Notes (Milestone 9):
   pricing calculation. It is never recomputed. Booking **modification /
   reschedule is not implemented** in M9.
 
+Notes (Milestone 10):
+
+- Operations drives the triage transitions that need no technician:
+  `pending -> confirmed`, `pending -> rejected`, `confirmed -> cancelled`.
+  Each is enforced against the same shared state machine and recorded in
+  `BookingStatusHistory` with the operator as `changedByUserId`.
+  `pending -> cancelled` stays a customer-only transition.
+- `confirmed -> assigned` and everything downstream (`in_progress`, `completed`)
+  require technician assignment and remain Milestone 11.
+- The operations booking DTOs are read-derived; no operations action recomputes
+  or overwrites the immutable price snapshot.
+
 ## Deliberately Deferred Entities
 
 The MVP should not start with a complex pricing rules engine, payment ledger, notification system, or multi-technician assignment model. These can be introduced only when a concrete requirement demands them.

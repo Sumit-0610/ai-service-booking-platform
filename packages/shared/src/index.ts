@@ -5,6 +5,7 @@ export * from './auth.js';
 export * from './availability.js';
 export * from './booking.js';
 export * from './catalogue.js';
+export * from './operations.js';
 export * from './pricing.js';
 
 export const healthResponseSchema = z.object({

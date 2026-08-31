@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 9: Booking workflow — in progress.**
+**Milestone 10: Operations dashboard — in progress.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–8 are complete with CI green on `origin/main`.
+Milestones 1–9 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -99,7 +99,7 @@ breakdown. No schema change. See [API Boundaries](api.md),
 No coupons, promotions, subscriptions, payments, rules engine, or booking
 persistence in this milestone.
 
-### M9: Booking workflow — in progress
+### M9: Booking workflow — complete
 
 Customer booking creation (`POST /api/v1/bookings`, body `{ slotId, addressId,
 customerNotes? }` only) in one PostgreSQL transaction: address-ownership /
@@ -118,10 +118,23 @@ No booking modification / reschedule, operations confirmation / assignment,
 technician job-status flow, payments, notifications, refunds, coupons, reviews,
 or AI in this milestone.
 
-### M10: Operations dashboard
+### M10: Operations dashboard — in progress
 
-Operations dashboard, booking detail view, and operational analytics using real
-stored data only.
+Operations-only (`requireRole('operations')`) read-and-triage surface:
+`GET /api/v1/operations/dashboard` (booking counts by status, active / upcoming,
+committed revenue by currency, technician counts — all DB aggregations),
+`GET /api/v1/operations/bookings` (filter by status / free-text / scheduled-date
+range, sort, bounded pagination), `GET /api/v1/operations/bookings/:id` (full
+detail + status timeline with actor), and
+`PATCH /api/v1/operations/bookings/:id/status` for the operations transitions
+that need no technician (`pending -> confirmed`, `pending -> rejected`,
+`confirmed -> cancelled`) — state-machine-enforced, CSRF-protected,
+transactional, recorded in `BookingStatusHistory`. Dashboard + booking-detail
+UI with route guards. No schema change. See [API Boundaries](api.md),
+[Database](database.md), and [Security Strategy](security.md).
+
+Technician assignment, technician profile / active-status management, and the
+technician job-status flow are **Milestone 11**, not this milestone.
 
 ### M11: Technician management and assignment
 

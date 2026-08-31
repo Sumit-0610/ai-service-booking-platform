@@ -368,33 +368,96 @@ there is no separate assignment step yet). `TechnicianBooking` carries the
 service, customer name, address, schedule and notes, but **not** the price
 snapshot. `PATCH .../status` is deferred to M11.
 
-## Operations/Admin Endpoints
+## Operations Dashboard (implemented — Milestone 10)
+
+`requireAuth -> requireRole('operations')`. Unauthenticated -> `401`; any other
+role -> `403`. Operations reads span **every** booking (not owner-scoped);
+access is gated purely by the role. Mounted at `/api/v1/operations`.
 
 ```txt
-GET   /api/v1/operations/dashboard
-GET   /api/v1/operations/bookings
-GET   /api/v1/operations/bookings/:bookingId
-POST  /api/v1/operations/bookings/:bookingId/assign-technician
-PATCH /api/v1/operations/bookings/:bookingId/status
+GET   /api/v1/operations/dashboard              -> 200 { dashboard }
+GET   /api/v1/operations/bookings               -> 200 { items: OperationsBookingSummary[], pagination }
+GET   /api/v1/operations/bookings/:id           -> 200 { booking: OperationsBooking } | 404
+PATCH /api/v1/operations/bookings/:id/status    -> 200 { booking } | 404 | 409   (X-CSRF-Token)
 ```
 
-```txt
-GET   /api/v1/operations/technicians
-POST  /api/v1/operations/technicians
-PATCH /api/v1/operations/technicians/:technicianId
-GET   /api/v1/operations/technicians/:technicianId/availability
+### `GET /operations/bookings` query parameters
+
+| Param         | Type                                                                   | Default        | Notes                                                               |
+| ------------- | ---------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------- |
+| `status`      | one of the 7 booking statuses                                          | —              | exact match; unknown value → `422`                                  |
+| `q`           | string, 1–100 chars                                                    | —              | case-insensitive substring of customer name / email or service name |
+| `from` / `to` | ISO-8601 with offset                                                   | —              | `scheduledStart` half-open range `[from, to)`; malformed → `422`    |
+| `sort`        | `created_desc` \| `created_asc` \| `scheduled_asc` \| `scheduled_desc` | `created_desc` | every ordering has a stable `id` tiebreaker                         |
+| `page`        | integer ≥ 1 (≤ 10000)                                                  | `1`            |                                                                     |
+| `limit`       | integer 1–100                                                          | `20`           | out-of-range → `422`, never clamped                                 |
+
+Unknown parameters are ignored; the server builds the Prisma `where` from this
+allow-list only. `OperationsBookingSummary` =
+`{ id, status, service: {slug,name}, customerName, technicianName: string|null,
+scheduledStart, scheduledEnd, totalCents, currency, createdAt }` — no customer
+email, no address, no raw model.
+
+### `GET /operations/bookings/:id`
+
+Malformed `:id` (not `[A-Za-z0-9-]{8,64}`) → `422`; unknown → `404`.
+`OperationsBooking` adds `customerEmail`, the full `address`, `customerNotes`,
+the complete `price` snapshot, and `statusHistory` (each event carries the
+actor's name and role: `{ from, to, reason, by, byRole, at }`).
+
+### `PATCH /operations/bookings/:id/status`
+
+Body — `{ status, reason? }`, `.strict()`. `status` must be one of
+`confirmed` | `rejected` | `cancelled` (an operator cannot set `assigned`,
+`in_progress`, `completed`, or `pending` directly). Any other key
+(`technicianId`, `priceTotalCents`, `changedByUserId`, …) → `422`.
+
+The transition is checked against the shared state machine for the `operations`
+actor — in Milestone 10 the reachable transitions are `pending -> confirmed`,
+`pending -> rejected`, and `confirmed -> cancelled`. A disallowed transition
+(including `pending -> cancelled`, which is a customer-only transition) → `409`.
+The change runs in a transaction with a conditional update, so a concurrent
+status change is rejected with `409` rather than lost, and a
+`BookingStatusHistory` row is written with the acting operator as
+`changedByUserId`.
+
+### Dashboard metrics
+
+`GET /operations/dashboard` returns `{ dashboard }` where `dashboard` is:
+
+```jsonc
+{
+  "bookings": {
+    "total": 42,
+    "byStatus": {
+      "pending": 5,
+      "confirmed": 8,
+      "assigned": 0,
+      "in_progress": 0,
+      "completed": 27,
+      "cancelled": 1,
+      "rejected": 1,
+    },
+    "active": 13, // status in pending | confirmed | assigned | in_progress
+    "upcoming": 9, // active set AND scheduledStart >= now
+  },
+  "revenue": {
+    "byCurrency": [{ "currency": "USD", "committedTotalCents": 372000 }],
+    // sum of priceTotalCents for bookings whose status is not cancelled/rejected,
+    // grouped by the booking's own snapshot currency
+  },
+  "technicians": { "total": 2, "active": 2 },
+}
 ```
 
-```txt
-GET /api/v1/operations/analytics
-```
+Every figure is a database aggregation (`count` / `groupBy`), never computed by
+loading rows into memory, and never fabricated.
 
-Responsibilities:
+### Later milestones (M11)
 
-- Search, filter, sort, and paginate bookings.
-- Assign technicians to eligible bookings.
-- Manage technician profiles and active status.
-- View availability and operational metrics.
+Technician assignment (`confirmed -> assigned`), technician profile / active-status
+management, and the technician job-status flow (`assigned -> in_progress -> completed`)
+are **not** part of Milestone 10.
 
 ## Technician Endpoints
 

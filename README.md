@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 9 (booking workflow) is in progress: a customer can book an available future slot for one of their own addresses (`POST /api/v1/bookings`) in one transaction — server-side price snapshot, initial status history, slot marked booked, and double-booking prevented by a UNIQUE constraint so concurrent attempts yield exactly one booking. Customers list, view, and cancel their own bookings (with a status timeline); technicians see the jobs on their own slots. Milestones 1–8 are complete with CI green. Booking reschedule, operations confirmation/assignment, the technician job-status flow, payments, and AI features are not implemented yet.
+Milestone 10 (operations dashboard) is in progress: an operations-only dashboard (`GET /api/v1/operations/dashboard`) with booking counts by status, active/upcoming counts, and committed revenue — all computed as database aggregations — plus a filterable, paginated booking queue, a full booking detail view with the status timeline, and operator status triage (`PATCH /api/v1/operations/bookings/:id/status` for `pending→confirmed`, `pending→rejected`, `confirmed→cancelled`), state-machine-enforced and CSRF-protected. Milestones 1–9 are complete with CI green. Technician assignment and management, the technician job-status flow, payments, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

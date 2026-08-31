@@ -11,6 +11,8 @@ import { ProtectedRoute } from './features/auth/ProtectedRoute';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { CataloguePage } from './features/catalogue/CataloguePage';
 import { ServiceDetailPage } from './features/catalogue/ServiceDetailPage';
+import { OperationsBookingDetailPage } from './features/operations/OperationsBookingDetailPage';
+import { OperationsDashboardPage } from './features/operations/OperationsDashboardPage';
 import './styles.css';
 
 export function App(): ReactElement {
@@ -45,6 +47,22 @@ export function App(): ReactElement {
               element={
                 <ProtectedRoute roles={['customer']}>
                   <BookingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/operations"
+              element={
+                <ProtectedRoute roles={['operations']}>
+                  <OperationsDashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/operations/bookings/:id"
+              element={
+                <ProtectedRoute roles={['operations']}>
+                  <OperationsBookingDetailPage />
                 </ProtectedRoute>
               }
             />

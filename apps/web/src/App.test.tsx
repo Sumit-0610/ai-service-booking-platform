@@ -89,6 +89,24 @@ describe('App routing and auth', () => {
     });
   });
 
+  it('redirects an unauthenticated visit to /operations to the login page', async () => {
+    mockApi();
+    window.history.pushState({}, '', '/operations');
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /log in/i })).toBeInTheDocument();
+    });
+  });
+
+  it('blocks a customer from the operations dashboard', async () => {
+    mockApi({ 'GET /api/v1/auth/me': () => Promise.resolve(json({ user: CUSTOMER })) });
+    window.history.pushState({}, '', '/operations');
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/do not have access/i);
+    });
+  });
+
   it('logs in and reflects the session in the header', async () => {
     const fetchMock = mockApi({
       'POST /api/v1/auth/login': () => Promise.resolve(json({ user: CUSTOMER }, 200)),

@@ -140,6 +140,41 @@
 - **Data minimisation**: the customer DTO omits all user ids and the raw model;
   the technician DTO omits the price snapshot.
 
+## Operations Dashboard Security (implemented — Milestone 10)
+
+- **Access control**: every `/api/v1/operations/*` route is behind
+  `requireAuth -> requireRole('operations')`. Unauthenticated -> `401`, customer
+  or technician -> `403`. The status-change mutation also requires a CSRF token
+  (`403 CSRF_ERROR` without one). Hiding the frontend route is never the control
+  — the server rejects the request.
+- **Broken access control / IDOR**: operations legitimately reads every booking,
+  so there is no per-row owner check — but there is also no client-supplied
+  owner id, filter, `select`, or `orderBy`. The booking `:id` is validated
+  against `[A-Za-z0-9-]{8,64}` before any query; unknown -> `404`.
+- **Mass assignment**: the status body is `.strict()` — only `status` and an
+  optional `reason` are accepted, and `status` is constrained to the three
+  operator-settable targets. `technicianId`, `priceTotalCents`,
+  `changedByUserId`, `customerId`, etc. are rejected with `422`. The actor is
+  taken from the session, never the body.
+- **Invalid status transitions**: checked server-side against the shared state
+  machine for the `operations` actor; a disallowed transition -> `409`, never a
+  silent no-op. The booking status is never set to a value the machine forbids.
+- **Concurrent status changes**: the change runs in a transaction with a
+  conditional `updateMany` (status must still match what was read); a losing
+  concurrent update -> `409`. Exactly one `BookingStatusHistory` row per applied
+  change.
+- **Arbitrary Prisma filtering / pagination abuse**: query params are Zod-parsed
+  into an allow-list; `page`/`limit` are bounded (`limit` ≤ 100, `page` ≤ 10000)
+  and out-of-range values are rejected, not clamped. `q` is a bounded
+  case-insensitive substring, never a raw expression.
+- **Sensitive data exposure**: the list DTO omits customer email, address, and
+  the price breakdown. The detail DTO adds the customer email, address, and
+  price snapshot — what an operator needs to act on a booking — but never a
+  password hash, session data, `passwordHash`, timestamps beyond `createdAt`,
+  or raw foreign keys (checked by tests).
+- **Unbounded queries**: the dashboard uses `count` / `groupBy` aggregation
+  only; the bookings table is never loaded into application memory.
+
 ## API Validation
 
 Use Zod schemas for:

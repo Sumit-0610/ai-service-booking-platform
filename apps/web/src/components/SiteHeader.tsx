@@ -17,9 +17,16 @@ export function SiteHeader(): ReactElement {
 
         <nav className="flex items-center gap-4 text-sm">
           {status === 'authenticated' && user ? (
-            <Link to="/account" className="font-medium text-slate-700 hover:text-slate-900">
-              {user.name}
-            </Link>
+            <>
+              {user.role === 'operations' ? (
+                <Link to="/operations" className="font-medium text-slate-700 hover:text-slate-900">
+                  Operations
+                </Link>
+              ) : null}
+              <Link to="/account" className="font-medium text-slate-700 hover:text-slate-900">
+                {user.name}
+              </Link>
+            </>
           ) : status === 'unauthenticated' ? (
             <Link
               to="/login"

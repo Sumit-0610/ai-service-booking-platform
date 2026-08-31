@@ -5,6 +5,7 @@ export {
   availabilityRepository,
   bookingRepository,
   catalogRepository,
+  operationsRepository,
   technicianRepository,
   userRepository,
 } from './repositories/index.js';
@@ -28,6 +29,11 @@ export type {
   CatalogueSortRow,
   SearchActiveServicesParams,
   ServicePriceRow,
+  OperationsBookingSummaryRow,
+  OperationsBookingDetailRow,
+  OperationsBookingSearchParams,
+  OperationsDashboardCounts,
+  OperationsStatusChangeResult,
 } from './repositories/index.js';
 
 /**

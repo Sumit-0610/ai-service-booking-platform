@@ -216,6 +216,20 @@ scheduledStart)`. Status history is `where { bookingId } order by createdAt` →
   stays `booked`. Because `Booking.slotId` is UNIQUE, a cancelled slot cannot be
   re-booked; reclaiming it is an operations concern for a later milestone.
 
+### Operations dashboard (Milestone 10)
+
+- **No schema change, no migration, no new index.** The operations booking queue
+  filters on `Booking.status` (existing `Booking(status)` index), on a
+  `scheduledStart` range (existing `Booking(scheduledStart)` index), and does a
+  case-insensitive `contains` on customer name / email / service name via joins
+  (`ILIKE`, which no btree serves — acceptable at MVP scale, same reasoning as
+  the catalogue `q` search). Sorting is by `createdAt` or `scheduledStart` with
+  an `id` tiebreaker.
+- Dashboard metrics use `prisma.booking.count` / `groupBy` aggregation and
+  `prisma.technician.count`; the bookings table is never loaded into memory.
+- `BookingStatusHistory.changedByUserId` records the acting operator for every
+  operations status change; the relation to `User` is `onDelete: SetNull`.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created
