@@ -63,6 +63,14 @@ function mockApi(options: MockOptions = {}) {
     if (url.pathname === '/api/v1/services') {
       return Promise.resolve(options.services?.(url) ?? json(serviceList([service()])));
     }
+    if (url.pathname.endsWith('/availability')) {
+      return Promise.resolve(
+        json({
+          items: [],
+          window: { from: '2026-01-01T00:00:00.000Z', to: '2026-01-15T00:00:00.000Z' },
+        }),
+      );
+    }
     if (url.pathname.startsWith('/api/v1/services/')) {
       return Promise.resolve(options.service?.() ?? json({ service: service() }));
     }
@@ -190,6 +198,6 @@ describe('CataloguePage', () => {
     await userEvent.click(card);
 
     expect(await screen.findByText(/what.s included/i)).toBeInTheDocument();
-    expect(screen.getByText(/online booking for this service opens/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /availability/i })).toBeInTheDocument();
   });
 });

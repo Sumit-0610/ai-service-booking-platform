@@ -1,5 +1,7 @@
 import { addressRepository } from './address-repository.js';
+import { availabilityRepository } from './availability-repository.js';
 import { catalogRepository } from './catalog-repository.js';
+import { technicianRepository } from './technician-repository.js';
 import { userRepository } from './user-repository.js';
 
 /**
@@ -8,13 +10,27 @@ import { userRepository } from './user-repository.js';
  */
 export const repositories = {
   addresses: addressRepository,
+  availability: availabilityRepository,
   catalog: catalogRepository,
+  technicians: technicianRepository,
   users: userRepository,
 };
 
-export { addressRepository, catalogRepository, userRepository };
+export {
+  addressRepository,
+  availabilityRepository,
+  catalogRepository,
+  technicianRepository,
+  userRepository,
+};
 export type { CreateUserInput } from './user-repository.js';
 export type { AddressRow, AddressWriteInput, AddressUpdateInput } from './address-repository.js';
+export type {
+  PublicSlotRow,
+  TechnicianSlotRow,
+  SlotWriteInput,
+  SlotWriteResult,
+} from './availability-repository.js';
 export type {
   CatalogueCategoryRow,
   CatalogueServiceRow,

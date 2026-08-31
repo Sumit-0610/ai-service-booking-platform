@@ -11,6 +11,7 @@ export interface ServiceQuery {
   category?: string | undefined;
   sort?: CatalogueSort | undefined;
   page?: number | undefined;
+  limit?: number | undefined;
 }
 
 function toSearchParams(query: ServiceQuery): string {
@@ -19,6 +20,7 @@ function toSearchParams(query: ServiceQuery): string {
   if (query.category) params.set('category', query.category);
   if (query.sort) params.set('sort', query.sort);
   if (query.page && query.page > 1) params.set('page', String(query.page));
+  if (query.limit) params.set('limit', String(query.limit));
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }

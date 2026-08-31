@@ -153,6 +153,29 @@ No migration was needed for Milestone 5.
   to delete an address a booking still references; the API surfaces this as
   `409 CONFLICT`. Historical booking records keep their address.
 
+### Availability & scheduling (Milestone 7)
+
+- **No schema change, no migration.** `AvailabilitySlot` and its constraints
+  (added in the initial migration) are unchanged. The exclusion constraint
+  `availability_slot_no_overlap` and the `endsAt > startsAt` CHECK are **not
+  weakened or removed**.
+- **Index review** against the two query shapes:
+  - Public availability — `WHERE serviceId = ? AND status = 'available' AND
+startsAt IN [from, to)` ordered by `startsAt`. Served by the existing
+    `AvailabilitySlot(serviceId, startsAt)` index (equality + range + sort).
+  - Technician's own list — `WHERE technicianId = ? AND startsAt IN [from, to)`
+    ordered by `startsAt`. Served by `AvailabilitySlot(technicianId, startsAt)`.
+  - `status`/time filtering is covered by `AvailabilitySlot(status, startsAt)`.
+    No new index was added — the existing three cover every predicate and sort.
+- **Technician ↔ service**: the schema has **no** technician-service
+  qualification model (no join table, no `Technician.services`). The only link
+  is a row in `AvailabilitySlot(technicianId, serviceId)`. So in Milestone 7 a
+  technician may create availability for **any active service**. A
+  `TechnicianService` join is the natural future addition when operations needs
+  to gate which technicians can offer which services — it was not invented here.
+- Ownership: availability is keyed by `Technician.id`, resolved from the
+  authenticated `User.id` via the unique `Technician.userId`.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created

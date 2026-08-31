@@ -58,6 +58,34 @@
 - **Referential integrity**: an address referenced by a booking cannot be
   deleted (`409 CONFLICT`), so historical booking records keep their address.
 
+## Availability & Scheduling Security (implemented — Milestone 7)
+
+- **Access control**: public availability is unauthenticated by design; the
+  technician endpoints require `requireAuth` + `requireRole('technician')` and a
+  resolved technician profile. Customers and operations get `403`. Mutations
+  require a CSRF token.
+- **IDOR**: every technician query, update and delete carries
+  `where: { id, technicianId }`. Another technician's slot returns the same
+  `404` as a missing one — ownership is never revealed.
+- **Mass assignment**: create/update bodies are `.strict()` — only
+  `serviceSlug`, `startsAt`, `endsAt` are accepted. `technicianId`, `userId`,
+  `status`, `bookingId` and any other key are rejected with `422`. The technician
+  is taken from the session, never the body.
+- **Service authorization**: a slot may only be created for a service that
+  exists and is **active**; an inactive or unknown `serviceSlug` → `422`.
+- **Timestamps**: instants must be ISO 8601 with an explicit offset; malformed or
+  offset-less values → `422`. All logic is UTC; DST/local-time ambiguity cannot
+  reach stored instants.
+- **Unbounded queries**: the public window is bounded (default 14 days, max 62);
+  past instants are always excluded regardless of `from`.
+- **Internal-field exposure**: the public DTO is `{ id, startsAt, endsAt, durationMinutes }`
+  only — no technician, user, service id, status, or timestamps.
+- **Overlap / concurrency**: the PostgreSQL exclusion constraint is the
+  authoritative guard; there is no race-prone application-level check. Concurrent
+  overlapping creates are database-safe (tested).
+- **Malformed identifiers**: `:id` is validated against `[A-Za-z0-9-]{8,64}`
+  before any query.
+
 ## API Validation
 
 Use Zod schemas for:

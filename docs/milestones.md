@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 6: Address management — in progress.**
+**Milestone 7: Availability and scheduling — in progress.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–5 are complete with CI green on `origin/main`.
+Milestones 1–6 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -64,18 +64,25 @@ and a responsive customer-facing catalogue UI. Active data only. See
 
 No availability, booking, dashboard, or AI work in this milestone.
 
-### M6: Address management — in progress
+### M6: Address management — complete
 
 Authenticated customer CRUD for `Address` (`/api/v1/addresses`): server-side
 per-row ownership, Zod validation, international model, referential-safe delete,
 and a focused address-management UI. Customer role only. No schema change. See
 [API Boundaries](api.md) and [Security Strategy](security.md).
 
-No availability, scheduling, pricing, or booking work in this milestone.
+### M7: Availability and scheduling — in progress
 
-### M7: Availability and scheduling
+Public availability lookup for an active service
+(`GET /api/v1/services/:slug/availability`, bounded time window, future-only,
+public DTO) and technician self-service slot CRUD
+(`/api/v1/technician/availability`, per-row ownership, CSRF, database-enforced
+overlap prevention). Customer and technician scheduling UIs. UTC throughout;
+no schema change. Booking is **not** implemented. See [API Boundaries](api.md),
+[Database](database.md), and [Security Strategy](security.md).
 
-Technician availability slots, availability lookup, and scheduling checks.
+No booking creation, technician assignment, pricing, or AI work in this
+milestone.
 
 ### M8: Pricing
 

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../lib/api';
 import { formatDuration, formatPrice } from '@aisbp/shared';
+import { ServiceAvailability } from '../availability/ServiceAvailability';
 import { useService } from './use-catalogue';
 
 export function ServiceDetailPage(): ReactElement {
@@ -87,9 +88,7 @@ export function ServiceDetailPage(): ReactElement {
         <p className="mt-2 whitespace-pre-line text-slate-700">{service.description}</p>
       </div>
 
-      <p className="mt-6 text-sm text-slate-500">
-        Online booking for this service opens in a later release.
-      </p>
+      <ServiceAvailability slug={service.slug} />
     </main>
   );
 }

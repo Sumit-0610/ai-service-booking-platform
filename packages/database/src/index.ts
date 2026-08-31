@@ -2,7 +2,9 @@ export { connectDatabase, disconnectDatabase } from './client.js';
 export {
   repositories,
   addressRepository,
+  availabilityRepository,
   catalogRepository,
+  technicianRepository,
   userRepository,
 } from './repositories/index.js';
 export type {
@@ -10,6 +12,10 @@ export type {
   AddressRow,
   AddressWriteInput,
   AddressUpdateInput,
+  PublicSlotRow,
+  TechnicianSlotRow,
+  SlotWriteInput,
+  SlotWriteResult,
   CatalogueCategoryRow,
   CatalogueServiceRow,
   CatalogueSortRow,

@@ -139,6 +139,71 @@ bookings keep their address).
 Normalization is limited to trimming, `line2` empty → `null`, and `country`
 uppercasing. Casing of every other field is preserved as entered.
 
+## Availability & Scheduling (implemented — Milestone 7)
+
+### Timestamp format
+
+Every instant on the wire is an ISO 8601 string. **On input it must carry a
+timezone designator** — `Z` (UTC) or `±HH:MM`; a bare wall-clock string is
+rejected with `422`. **Responses are always UTC** with millisecond precision,
+e.g. `2026-09-15T09:00:00.000Z`. All business logic runs in UTC; the web client
+renders instants in the viewer's local timezone.
+
+### Public availability (customer)
+
+No authentication. Only an **active** service exposes availability.
+
+```txt
+GET /api/v1/services/:slug/availability?from=<iso>&to=<iso>
+  -> 200 { items: Slot[], window: { from, to } }  | 404 (unknown/inactive service)
+```
+
+- `from` defaults to now; `to` defaults to `from + 14 days`. The window may not
+  exceed **62 days** and `to` must be after `from` (`422` otherwise).
+- Returns only slots that are in the **future** (`startsAt > now`, regardless of
+  `from`), `available`, unbooked, and belong to an **active** technician.
+- `Slot` = `{ id, startsAt, endsAt, durationMinutes }` — no technician, no
+  service id, no status, no internal fields.
+- Ordered by `startsAt` then `id` (deterministic).
+
+### Technician availability (technician)
+
+`requireAuth` → `requireRole('technician')` → the technician profile is resolved
+from the session; mutations require `X-CSRF-Token`. **Customers and operations
+get `403`.**
+
+```txt
+GET    /api/v1/technician/availability          -> 200 { items: TechSlot[] }
+POST   /api/v1/technician/availability          -> 201 { slot }        (X-CSRF-Token)
+PATCH  /api/v1/technician/availability/:id      -> 200 { slot } | 404  (X-CSRF-Token)
+DELETE /api/v1/technician/availability/:id      -> 204 | 404 | 409     (X-CSRF-Token)
+```
+
+- `GET` returns the technician's own upcoming slots (`endsAt >= now`), ordered by
+  `startsAt`. `TechSlot` = `{ id, service: { slug, name }, startsAt, endsAt, durationMinutes, status, booked }`.
+- `POST` / `PATCH` body: `{ serviceSlug, startsAt, endsAt }` (`PATCH` is partial,
+  non-empty). `.strict()` — **`technicianId`, `userId`, `status`, `bookingId` and
+  any other key are rejected with `422`.** The authenticated technician always
+  owns the slot.
+- Rules: `endsAt > startsAt`; duration ≤ 12 h; `startsAt` in the future and
+  within 365 days; the service must exist and be **active** (else `422` on
+  `serviceSlug`). A booked slot cannot be edited or deleted (`409`).
+- **Ownership**: every query, update and delete carries `where: { id, technicianId }`.
+  Another technician's slot returns `404` — the same as a missing one.
+- Malformed `:id` (not `[A-Za-z0-9-]{8,64}`) → `422`.
+
+### Overlap behaviour
+
+A PostgreSQL exclusion constraint (`availability_slot_no_overlap`, GiST over
+`technicianId` + `tstzrange(startsAt, endsAt, '[)')`) is the authoritative
+guard. The API never does a read-then-insert overlap check — it attempts the
+write and maps the database's rejection to `409 CONFLICT`, which is correct under
+concurrent requests.
+
+- Adjacent slots (`10:00–11:00`, `11:00–12:00`) are **allowed**.
+- Overlapping slots (`10:00–11:00`, `10:30–11:30`) are **rejected** (`409`).
+- Two concurrent overlapping creates: exactly one succeeds, the other gets `409`.
+
 ## Booking Endpoints (later milestones)
 
 ```txt

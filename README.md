@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 6 (address management) is in progress: authenticated customer CRUD for addresses (`/api/v1/addresses`) with server-side per-row ownership, Zod validation, referential-safe deletion, and a focused address-management UI. Milestones 1–5 are complete with CI green. Availability, booking, dashboard, and AI features are not implemented yet.
+Milestone 7 (availability & scheduling) is in progress: a public availability lookup for active services (`GET /api/v1/services/:slug/availability`) and technician self-service slot management (`/api/v1/technician/availability`) with per-row ownership and database-enforced overlap prevention, plus customer and technician scheduling UIs. Milestones 1–6 are complete with CI green. Booking creation, technician assignment, pricing, dashboard, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

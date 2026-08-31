@@ -141,8 +141,20 @@ Indexes:
 
 Constraints:
 
-- `endsAt` must be after `startsAt`
-- booking logic must prevent double-booking the same slot
+- `endsAt` must be after `startsAt` (CHECK)
+- a technician's slots may never overlap in time — enforced by a PostgreSQL
+  GiST exclusion constraint, not application code. Adjacent slots are allowed.
+
+Notes (Milestone 7):
+
+- There is **no technician ↔ service qualification model** in the schema. A
+  technician's link to a service is only "this technician has an availability
+  slot for it". Availability may currently be created for any active service;
+  a `TechnicianService` join is the natural place to gate this later.
+- `status` is system-managed. The technician API creates slots as `available`
+  and does not accept a client-supplied `status`.
+- Timestamps are UTC instants (`timestamptz`); the API is ISO 8601 with an
+  explicit offset on input and `Z` on output.
 
 ### Booking
 
