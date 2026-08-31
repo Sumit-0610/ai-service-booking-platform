@@ -116,6 +116,24 @@ these), and covered by integration tests:
   — the stored snapshot is always internally consistent.
 - `Service` `CHECK (basePriceCents >= 0)` and `CHECK (estimatedDurationMinutes > 0)`.
 
+### Index review — catalogue (Milestone 5)
+
+The public catalogue queries filter on `Service.active` (always), optionally join
+`ServiceCategory` by its unique `slug` and filter on `categoryId`, and sort by
+`name` / `basePriceCents` / `createdAt`.
+
+- The existing `Service(active)` and `Service(categoryId)` single-column indexes
+  and the unique `ServiceCategory(slug)` index already cover every filter/join
+  predicate.
+- Sorting is not indexed. With a small catalogue this is a cheap in-memory sort,
+  and the [performance strategy](performance.md) requires measuring with query
+  plans before adding an index. **No new index was added.**
+- Case-insensitive `q` search uses `ILIKE '%term%'`, which no btree index can
+  serve; a `pg_trgm` GIN index would help at scale but is out of scope for the
+  MVP and would be added only against a measured need.
+
+No migration was needed for Milestone 5.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created
@@ -165,10 +183,11 @@ pnpm --filter @aisbp/database db:seed
 
 Deterministic and safe to re-run. It creates: five users (two customers, one
 operations, two technicians), two customer addresses, three service categories,
-six services (one inactive to exercise catalogue filtering), two technicians,
-and one week of upcoming, non-overlapping availability slots. Password hashes
-are placeholders; real authentication is a later milestone. There is no seeded
-booking data and no fabricated metrics.
+fourteen services (thirteen active plus one inactive, to exercise catalogue
+filtering), two technicians, and one week of upcoming, non-overlapping
+availability slots. Every seeded account has the development password
+`aisbp-dev-password`. There is no seeded booking data and no fabricated metrics,
+ratings, or reviews.
 
 `pnpm --filter @aisbp/database db:reset` drops the database, re-applies
 migrations, and re-seeds.

@@ -1,8 +1,6 @@
 @import 'tailwindcss';
 
 :root {
-  color: #172033;
-  background: #f7f8fb;
   font-family:
     Inter,
     ui-sans-serif,
@@ -17,68 +15,12 @@ body {
   margin: 0;
 }
 
-.app-shell {
-  align-items: center;
-  display: flex;
-  min-height: 100vh;
-  padding: 32px;
-}
-
-.intro {
-  max-width: 680px;
-}
-
-.eyebrow {
-  color: #3f6f78;
-  font-size: 0.875rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  margin: 0 0 12px;
-  text-transform: uppercase;
-}
-
-h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 1;
-  margin: 0 0 20px;
-}
-
-.intro p {
-  font-size: 1.125rem;
-  line-height: 1.6;
-}
-
-.status {
-  border: 1px solid #c8d0dc;
-  border-radius: 8px;
-  display: inline-flex;
-  font-weight: 700;
-  margin-top: 16px;
-  padding: 10px 14px;
-}
-
-.status-online {
-  background: #e8f7ef;
-  border-color: #93d4ac;
-  color: #17633a;
-}
-
-.status-offline {
-  background: #fff0ed;
-  border-color: #efaa9d;
-  color: #963825;
-}
-
-.status-checking {
-  background: #eef3ff;
-  border-color: #b9c9ef;
-  color: #31518a;
-}
-
+/* The auth screens predate the Tailwind-based catalogue UI and keep this small
+   hand-written stylesheet. New screens use Tailwind utilities. */
 .auth-shell {
   margin: 0 auto;
   max-width: 380px;
-  padding: 64px 24px;
+  padding: 48px 24px;
 }
 
 .auth-shell h1 {
@@ -107,7 +49,7 @@ h1 {
 }
 
 .auth-shell button {
-  background: #1f2a44;
+  background: #0f172a;
   border: 0;
   border-radius: 8px;
   color: #fff;

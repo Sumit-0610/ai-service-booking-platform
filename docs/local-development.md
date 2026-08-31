@@ -77,8 +77,9 @@ pnpm --filter @aisbp/web dev
 Default URLs:
 
 - API: `http://localhost:4000`
-- Web: `http://localhost:5173`
+- Web: `http://localhost:5173` (the service catalogue is the home page)
 - Health endpoint: `http://localhost:4000/api/v1/health`
+- Catalogue API: `http://localhost:4000/api/v1/services`
 
 ## Validation
 

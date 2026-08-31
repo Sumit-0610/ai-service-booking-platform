@@ -13,16 +13,15 @@ The backend exposes a versioned REST API under `/api/v1`.
 
 ## Common Patterns
 
-Pagination query parameters:
+List endpoints paginate with `page` (1-based) and `limit`, and sort with a
+single `sort` parameter whose values encode both field and direction (e.g.
+`price_asc`). List responses wrap results as
+`{ items: [...], pagination: { page, limit, total, totalPages, hasNextPage, hasPreviousPage } }`.
+Every sort has a stable tiebreaker so pages never overlap or skip rows.
 
-```txt
-page
-pageSize
-sort
-order
-```
-
-Filtering should use explicit query parameters rather than unstructured ad hoc filters.
+Filtering uses an explicit, per-endpoint allow-list of query parameters. Unknown
+parameters are ignored; no client-supplied filter is ever passed to the
+database.
 
 Standard error shape (implemented):
 
@@ -40,21 +39,42 @@ Error codes in use: `VALIDATION_ERROR` (422), `INVALID_CREDENTIALS` (401),
 `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `CSRF_ERROR` (403), `EMAIL_TAKEN`
 (409), `RATE_LIMITED` (429), `NOT_FOUND` (404), `INTERNAL` (500).
 
-## Public Endpoints
+## Public Catalogue Endpoints (implemented — Milestone 5)
+
+No authentication. Only **active** categories and services are ever returned,
+and responses carry public fields only (no `active` flag, no timestamps, no raw
+foreign keys).
 
 ```txt
-GET /api/v1/service-categories
-GET /api/v1/services
-GET /api/v1/services/:serviceId
-GET /api/v1/availability
+GET /api/v1/categories            -> 200 { items: Category[] }
+GET /api/v1/services              -> 200 { items: Service[], pagination }
+GET /api/v1/services/:slug        -> 200 { service: Service }  | 404
 ```
 
-Capabilities:
+`Category` = `{ id, slug, name, description }`.
+`Service` = `{ id, slug, name, description, priceCents, currency, durationMinutes, category: { id, slug, name } }`.
 
-- Browse active service categories.
-- Browse/search/filter/sort active services.
-- View service details.
-- Check available slots by service, date range, and location context where applicable.
+### `GET /api/v1/services` query parameters
+
+| Param      | Type                                                                 | Default    | Notes                                                                                                  |
+| ---------- | -------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
+| `q`        | string, 1–100 chars                                                  | —          | Case-insensitive substring match on service name **or** description. Empty/blank is treated as absent. |
+| `category` | string (category slug)                                               | —          | Filter to one active category. An unknown slug returns an empty page, not an error.                    |
+| `sort`     | `name_asc` \| `name_desc` \| `price_asc` \| `price_desc` \| `newest` | `name_asc` | Every ordering has a stable `id` tiebreaker, so pagination is deterministic.                           |
+| `page`     | integer ≥ 1 (≤ 10000)                                                | `1`        |                                                                                                        |
+| `limit`    | integer 1–48                                                         | `12`       | Values outside the range are rejected with `422`, never clamped.                                       |
+
+Unknown query parameters are ignored. The server builds the Prisma `where`
+clause from this allow-list only — no client-supplied filter is passed through.
+
+`pagination` = `{ page, limit, total, totalPages, hasNextPage, hasPreviousPage }`.
+
+Errors: invalid query params or a malformed `:slug` → `422 VALIDATION_ERROR`;
+an unknown or inactive service slug → `404 NOT_FOUND`.
+
+### Later milestones
+
+`GET /api/v1/availability` and booking endpoints arrive in their own milestones.
 
 ## Authentication Endpoints (implemented — Milestone 4)
 

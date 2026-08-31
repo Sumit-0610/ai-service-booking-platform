@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 4: Authentication and authorization — in progress.**
+**Milestone 5: Service catalogue — in progress.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–3 are complete with CI green on `origin/main`.
+Milestones 1–4 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -46,7 +46,7 @@ layer. Includes first-class booking price snapshot fields. See
 
 No authentication, API CRUD endpoints, or frontend features in this milestone.
 
-### M4: Authentication and authorization — in progress
+### M4: Authentication and authorization — complete
 
 Register/login/logout/me endpoints, Argon2id password hashing, Redis-backed
 HttpOnly cookie sessions, CSRF protection, rate limiting, reusable
@@ -55,9 +55,14 @@ login/register/logout web UI. See [Authentication Strategy](authentication.md).
 
 No booking, catalogue, dashboard, or AI features in this milestone.
 
-### M5: Service catalogue
+### M5: Service catalogue — in progress
 
-Service categories and services, with the read/detail endpoints.
+Public read-only catalogue: `GET /api/v1/categories`, `GET /api/v1/services`
+(search / category filter / sort / pagination), `GET /api/v1/services/:slug`,
+and a responsive customer-facing catalogue UI. Active data only. See
+[API Boundaries](api.md) and [Database](database.md).
+
+No availability, booking, dashboard, or AI work in this milestone.
 
 ### M6: Address management
 

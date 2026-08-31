@@ -39,12 +39,15 @@ afterAll(async () => {
 
 describe('seed data through the repository layer', () => {
   it('returns only active services and hides inactive ones', async () => {
-    const services = await repositories.catalog.listActiveServices();
+    const { items, total } = await repositories.catalog.searchActiveServices({
+      sort: 'name_asc',
+      skip: 0,
+      take: 100,
+    });
 
-    expect(services.length).toBeGreaterThan(0);
-    expect(services.every((service) => service.active)).toBe(true);
-    expect(services.map((service) => service.slug)).toContain('washing-machine-installation');
-    expect(services.map((service) => service.slug)).not.toContain('legacy-tv-wall-mount');
+    expect(total).toBeGreaterThan(0);
+    expect(items.map((service) => service.slug)).toContain('washing-machine-installation');
+    expect(items.map((service) => service.slug)).not.toContain('legacy-tv-wall-mount');
   });
 
   it('returns seeded categories', async () => {
@@ -52,9 +55,12 @@ describe('seed data through the repository layer', () => {
     expect(categories.map((category) => category.slug)).toContain('appliance-installation');
   });
 
-  it('looks a service up by slug', async () => {
-    const service = await repositories.catalog.findServiceBySlug('wifi-mesh-setup');
+  it('looks an active service up by slug', async () => {
+    const service = await repositories.catalog.findActiveServiceBySlug('wifi-mesh-setup');
     expect(service?.name).toBe('Wi-Fi Mesh Setup');
+
+    const inactive = await repositories.catalog.findActiveServiceBySlug('legacy-tv-wall-mount');
+    expect(inactive).toBeNull();
   });
 });
 

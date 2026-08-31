@@ -1,0 +1,47 @@
+import { useState, type ReactElement } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthProvider';
+
+export function AccountPage(): ReactElement {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+
+  const onLogout = async () => {
+    setBusy(true);
+    try {
+      await logout();
+      navigate('/', { replace: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="mx-auto max-w-md px-4 py-12 sm:px-6">
+      <h1 className="text-2xl font-bold text-slate-900">Your account</h1>
+      <dl className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+        <div className="flex justify-between px-4 py-3 text-sm">
+          <dt className="text-slate-500">Name</dt>
+          <dd className="font-medium text-slate-900">{user?.name}</dd>
+        </div>
+        <div className="flex justify-between px-4 py-3 text-sm">
+          <dt className="text-slate-500">Email</dt>
+          <dd className="font-medium text-slate-900">{user?.email}</dd>
+        </div>
+        <div className="flex justify-between px-4 py-3 text-sm">
+          <dt className="text-slate-500">Role</dt>
+          <dd className="font-medium text-slate-900">{user?.role}</dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        onClick={onLogout}
+        disabled={busy}
+        className="mt-6 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+      >
+        Log out
+      </button>
+    </main>
+  );
+}

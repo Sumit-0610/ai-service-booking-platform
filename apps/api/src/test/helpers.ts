@@ -78,6 +78,7 @@ export async function resetAuthState(): Promise<void> {
 }
 
 export async function closeConnections(): Promise<void> {
-  await redis.quit();
+  // `disconnect()` is safe on any connection state, including "never connected".
+  redis.disconnect();
   await prisma.$disconnect();
 }

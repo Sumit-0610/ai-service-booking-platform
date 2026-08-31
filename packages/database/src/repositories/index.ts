@@ -12,3 +12,9 @@ export const repositories = {
 
 export { catalogRepository, userRepository };
 export type { CreateUserInput } from './user-repository.js';
+export type {
+  CatalogueCategoryRow,
+  CatalogueServiceRow,
+  CatalogueSortRow,
+  SearchActiveServicesParams,
+} from './catalog-repository.js';
