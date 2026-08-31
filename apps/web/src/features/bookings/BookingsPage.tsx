@@ -1,9 +1,11 @@
 import { useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  bookingStatusValues,
   formatPrice,
   isCustomerCancellable,
   type Booking,
+  type BookingListSort,
   type BookingStatus,
   type BookingStatusEvent,
 } from '@aisbp/shared';
@@ -32,18 +34,54 @@ function formatWhen(iso: string): string {
 }
 
 export function BookingsPage(): ReactElement {
-  const { status, bookings, error, refetch } = useMyBookings();
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | ''>('');
+  const [sort, setSort] = useState<BookingListSort>('created_desc');
+  const [page, setPage] = useState(1);
+  const { status, bookings, pagination, error, refetch } = useMyBookings({
+    status: statusFilter || undefined,
+    sort,
+    page,
+  });
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-bold text-slate-900">Your bookings</h1>
-
-      {status === 'loading' ? (
-        <div className="mt-6 space-y-3" aria-busy="true">
-          <div className="h-28 animate-pulse rounded-2xl bg-slate-100" />
-          <div className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-900">Your bookings</h1>
+        <div className="flex gap-2 text-sm">
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as BookingStatus | '');
+              setPage(1);
+            }}
+            className="rounded-lg border border-slate-300 px-2 py-1.5"
+            aria-label="Filter by status"
+          >
+            <option value="">All statuses</option>
+            {bookingStatusValues.map((s) => (
+              <option key={s} value={s}>
+                {s.replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as BookingListSort);
+              setPage(1);
+            }}
+            className="rounded-lg border border-slate-300 px-2 py-1.5"
+            aria-label="Sort bookings"
+          >
+            <option value="created_desc">Newest first</option>
+            <option value="created_asc">Oldest first</option>
+            <option value="scheduled_asc">Soonest scheduled</option>
+            <option value="scheduled_desc">Latest scheduled</option>
+          </select>
         </div>
-      ) : status === 'error' ? (
+      </div>
+
+      {status === 'error' ? (
         <div role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm">
           <p className="font-medium text-rose-800">We couldn&apos;t load your bookings.</p>
           <button
@@ -55,20 +93,59 @@ export function BookingsPage(): ReactElement {
           </button>
           <span className="sr-only">{error?.message}</span>
         </div>
+      ) : status === 'loading' && bookings.length === 0 ? (
+        <div className="mt-6 space-y-3" aria-busy="true">
+          <div className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+          <div className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+        </div>
       ) : bookings.length === 0 ? (
         <p className="mt-6 text-sm text-slate-600">
-          You have no bookings yet.{' '}
-          <Link to="/" className="font-semibold text-sky-700 hover:underline">
-            Browse services
-          </Link>
-          .
+          {statusFilter ? (
+            'No bookings match this filter.'
+          ) : (
+            <>
+              You have no bookings yet.{' '}
+              <Link to="/" className="font-semibold text-sky-700 hover:underline">
+                Browse services
+              </Link>
+              .
+            </>
+          )}
         </p>
       ) : (
-        <ul className="mt-6 space-y-4">
-          {bookings.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} onChanged={refetch} />
-          ))}
-        </ul>
+        <>
+          <ul className="mt-6 space-y-4">
+            {bookings.map((booking) => (
+              <BookingCard key={booking.id} booking={booking} onChanged={refetch} />
+            ))}
+          </ul>
+
+          {pagination.totalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+              <span>
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={!pagination.hasPreviousPage}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={!pagination.hasNextPage}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </>
       )}
     </main>
   );

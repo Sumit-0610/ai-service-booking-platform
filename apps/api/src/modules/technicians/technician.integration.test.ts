@@ -253,13 +253,40 @@ describe('GET /api/v1/operations/technicians', () => {
     expect(inactive.body.items.every((t: { active: boolean }) => t.active === false)).toBe(true);
     expect(inactive.body.items.map((t: { id: string }) => t.id)).toContain(techC.id);
 
-    expect(
-      (
-        await agent()
-          .get('/api/v1/operations/technicians?limit=999')
-          .set('Cookie', opsCookies.header)
-      ).status,
-    ).toBe(422);
+    for (const q of ['?limit=999', '?limit=0', '?page=0', '?sort=weird']) {
+      expect(
+        (await agent().get(`/api/v1/operations/technicians${q}`).set('Cookie', opsCookies.header))
+          .status,
+        q,
+      ).toBe(422);
+    }
+  });
+
+  it('sorts by name in both directions and paginates deterministically', async () => {
+    const asc = await agent()
+      .get('/api/v1/operations/technicians?sort=name_asc&limit=50')
+      .set('Cookie', opsCookies.header);
+    const desc = await agent()
+      .get('/api/v1/operations/technicians?sort=name_desc&limit=50')
+      .set('Cookie', opsCookies.header);
+    const ascNames = asc.body.items.map((t: { displayName: string }) => t.displayName);
+    expect([...ascNames].sort()).toEqual(ascNames);
+    expect(desc.body.items.map((t: { displayName: string }) => t.displayName)).toEqual(
+      [...ascNames].reverse(),
+    );
+
+    const p1 = await agent()
+      .get('/api/v1/operations/technicians?limit=2&page=1&sort=name_asc')
+      .set('Cookie', opsCookies.header);
+    const p2 = await agent()
+      .get('/api/v1/operations/technicians?limit=2&page=2&sort=name_asc')
+      .set('Cookie', opsCookies.header);
+    expect(p1.body.items).toHaveLength(2);
+    expect(p1.body.pagination).toMatchObject({ page: 1, limit: 2, hasPreviousPage: false });
+    const overlap = p1.body.items
+      .map((t: { id: string }) => t.id)
+      .filter((id: string) => p2.body.items.some((t: { id: string }) => t.id === id));
+    expect(overlap).toEqual([]);
   });
 });
 
@@ -764,6 +791,54 @@ describe('GET /api/v1/technician/profile', () => {
         })
       ).status,
     ).toBe(200);
+  });
+});
+
+describe('GET /api/v1/technician/bookings — filter & pagination (Milestone 12)', () => {
+  it('paginates, filters by status, and rejects bad params', async () => {
+    const t = await makeTech('jobs-page', true, [serviceA]);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const bookingId = await bookConfirmed(serviceA, techD.id);
+      await opsPost(`/api/v1/operations/bookings/${bookingId}/assign-technician`, {
+        technicianId: t.id,
+      });
+      ids.push(bookingId);
+    }
+    // move one to in_progress
+    await techPatch(t.cookies, `/api/v1/technician/bookings/${ids[0]}/status`, {
+      status: 'in_progress',
+    });
+
+    const p1 = await agent()
+      .get('/api/v1/technician/bookings?limit=2&page=1&sort=scheduled_asc')
+      .set('Cookie', t.cookies.header);
+    expect(p1.status).toBe(200);
+    expect(p1.body.items).toHaveLength(2);
+    expect(p1.body.pagination).toEqual({
+      page: 1,
+      limit: 2,
+      total: 3,
+      totalPages: 2,
+      hasNextPage: true,
+      hasPreviousPage: false,
+    });
+
+    const assignedOnly = await agent()
+      .get('/api/v1/technician/bookings?status=assigned')
+      .set('Cookie', t.cookies.header);
+    expect(assignedOnly.body.items.every((b: { status: string }) => b.status === 'assigned')).toBe(
+      true,
+    );
+    expect(assignedOnly.body.pagination.total).toBe(2);
+
+    for (const q of ['?limit=0', '?limit=51', '?page=abc', '?status=nope', '?sort=nope']) {
+      expect(
+        (await agent().get(`/api/v1/technician/bookings${q}`).set('Cookie', t.cookies.header))
+          .status,
+        q,
+      ).toBe(422);
+    }
   });
 });
 

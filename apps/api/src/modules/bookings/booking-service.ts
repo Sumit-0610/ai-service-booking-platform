@@ -7,12 +7,18 @@ import {
 } from '@aisbp/database';
 import {
   bookingPriceSchema,
+  pageOffset,
+  paginationMeta,
   priceBreakdownSchema,
   type Booking,
+  type BookingList,
   type BookingStatusEvent,
   type CreateBookingInput,
+  type CustomerBookingsQuery,
   type TechnicianBooking,
+  type TechnicianBookingList,
   type TechnicianJob,
+  type TechnicianJobsQuery,
   type TechnicianJobStatusTarget,
 } from '@aisbp/shared';
 import { AppError } from '../../lib/errors.js';
@@ -121,9 +127,18 @@ export const bookingService = {
     }
   },
 
-  async listForCustomer(customerId: string): Promise<Booking[]> {
-    const rows = await repositories.bookings.listForCustomer(customerId);
-    return rows.map(toBooking);
+  async listForCustomer(customerId: string, query: CustomerBookingsQuery): Promise<BookingList> {
+    const { items, total } = await repositories.bookings.searchForCustomer({
+      customerId,
+      status: query.status,
+      sort: query.sort,
+      skip: pageOffset(query.page, query.limit),
+      take: query.limit,
+    });
+    return {
+      items: items.map(toBooking),
+      pagination: paginationMeta(query.page, query.limit, total),
+    };
   },
 
   async getForCustomer(customerId: string, id: string): Promise<Booking> {
@@ -156,9 +171,21 @@ export const bookingService = {
     }
   },
 
-  async listForTechnician(technicianId: string): Promise<TechnicianBooking[]> {
-    const rows = await repositories.bookings.listForTechnician(technicianId);
-    return rows.map(toTechnicianBooking);
+  async listForTechnician(
+    technicianId: string,
+    query: TechnicianJobsQuery,
+  ): Promise<TechnicianBookingList> {
+    const { items, total } = await repositories.bookings.searchForTechnician({
+      technicianId,
+      status: query.status,
+      sort: query.sort,
+      skip: pageOffset(query.page, query.limit),
+      take: query.limit,
+    });
+    return {
+      items: items.map(toTechnicianBooking),
+      pagination: paginationMeta(query.page, query.limit, total),
+    };
   },
 
   async getForTechnician(technicianId: string, id: string): Promise<TechnicianJob> {

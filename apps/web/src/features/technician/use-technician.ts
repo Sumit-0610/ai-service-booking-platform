@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { TechnicianBooking, TechnicianJob, TechnicianProfile } from '@aisbp/shared';
+import type {
+  PaginationMeta,
+  TechnicianBooking,
+  TechnicianJob,
+  TechnicianProfile,
+} from '@aisbp/shared';
 import { ApiError } from '../../lib/api';
-import { technicianApi } from './technician-api';
+import { technicianApi, type TechnicianJobsQuery } from './technician-api';
 
 export type AsyncStatus = 'loading' | 'success' | 'error';
 
@@ -9,27 +14,40 @@ function normaliseError(error: unknown): ApiError | Error {
   return error instanceof Error ? error : new Error('Something went wrong');
 }
 
-export function useTechnicianJobs(): {
+const EMPTY_PAGINATION: PaginationMeta = {
+  page: 1,
+  limit: 10,
+  total: 0,
+  totalPages: 0,
+  hasNextPage: false,
+  hasPreviousPage: false,
+};
+
+export function useTechnicianJobs(query: TechnicianJobsQuery): {
   status: AsyncStatus;
   profile: TechnicianProfile | null;
   jobs: TechnicianBooking[];
+  pagination: PaginationMeta;
   error: ApiError | Error | null;
   refetch: () => void;
 } {
   const [status, setStatus] = useState<AsyncStatus>('loading');
   const [profile, setProfile] = useState<TechnicianProfile | null>(null);
   const [jobs, setJobs] = useState<TechnicianBooking[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta>(EMPTY_PAGINATION);
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [nonce, setNonce] = useState(0);
+  const key = `${query.status ?? ''}|${query.sort ?? ''}|${query.page ?? 1}|${nonce}`;
 
   useEffect(() => {
     let active = true;
     setStatus('loading');
-    Promise.all([technicianApi.profile(), technicianApi.listJobs()])
+    Promise.all([technicianApi.profile(), technicianApi.listJobs(query)])
       .then(([p, j]) => {
         if (!active) return;
         setProfile(p.profile);
         setJobs(Array.isArray(j.items) ? j.items : []);
+        setPagination(j.pagination ?? EMPTY_PAGINATION);
         setError(null);
         setStatus('success');
       })
@@ -41,9 +59,16 @@ export function useTechnicianJobs(): {
     return () => {
       active = false;
     };
-  }, [nonce]);
+  }, [key]);
 
-  return { status, profile, jobs, error, refetch: useCallback(() => setNonce((n) => n + 1), []) };
+  return {
+    status,
+    profile,
+    jobs,
+    pagination,
+    error,
+    refetch: useCallback(() => setNonce((n) => n + 1), []),
+  };
 }
 
 export function useTechnicianJob(id: string): {

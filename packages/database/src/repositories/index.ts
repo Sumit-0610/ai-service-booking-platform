@@ -40,6 +40,8 @@ export type {
   CreateBookingResult,
   CancelBookingResult,
   TechnicianJobStatusResult,
+  BookingListSearchParams,
+  BookingListSort,
 } from './booking-repository.js';
 export type {
   OperationsBookingSummaryRow,

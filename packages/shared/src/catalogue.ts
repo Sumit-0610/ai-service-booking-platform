@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { pageParams, paginationMetaSchema, type PaginationMeta } from './pagination.js';
 
 /**
  * Shared contracts for the public service catalogue. The API validates query
@@ -7,8 +8,11 @@ import { z } from 'zod';
 
 export const CATALOGUE_PAGE_SIZE_DEFAULT = 12;
 export const CATALOGUE_PAGE_SIZE_MAX = 48;
-export const CATALOGUE_PAGE_MAX = 10_000;
 export const CATALOGUE_QUERY_MAX_LENGTH = 100;
+
+/** Re-exported so catalogue consumers keep a single import site. */
+export { paginationMetaSchema };
+export type { PaginationMeta };
 
 export const catalogueSortValues = [
   'name_asc',
@@ -30,13 +34,10 @@ export const catalogueQuerySchema = z.object({
   q: optionalText,
   category: optionalText,
   sort: catalogueSortSchema,
-  page: z.coerce.number().int().min(1).max(CATALOGUE_PAGE_MAX).default(1),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(CATALOGUE_PAGE_SIZE_MAX)
-    .default(CATALOGUE_PAGE_SIZE_DEFAULT),
+  ...pageParams({
+    defaultLimit: CATALOGUE_PAGE_SIZE_DEFAULT,
+    maxLimit: CATALOGUE_PAGE_SIZE_MAX,
+  }),
 });
 export type CatalogueQuery = z.infer<typeof catalogueQuerySchema>;
 export type CatalogueQueryInput = z.input<typeof catalogueQuerySchema>;
@@ -60,16 +61,6 @@ export const catalogueServiceSchema = z.object({
   category: z.object({ id: z.string(), slug: z.string(), name: z.string() }),
 });
 export type CatalogueService = z.infer<typeof catalogueServiceSchema>;
-
-export const paginationMetaSchema = z.object({
-  page: z.number().int(),
-  limit: z.number().int(),
-  total: z.number().int(),
-  totalPages: z.number().int(),
-  hasNextPage: z.boolean(),
-  hasPreviousPage: z.boolean(),
-});
-export type PaginationMeta = z.infer<typeof paginationMetaSchema>;
 
 export const catalogueCategoryListSchema = z.object({ items: z.array(catalogueCategorySchema) });
 export type CatalogueCategoryList = z.infer<typeof catalogueCategoryListSchema>;

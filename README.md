@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 11 (technician management and assignment) is complete: operations manage technician records and per-service qualifications (new `TechnicianService` join table), assign or reassign a technician to a `confirmed`/`assigned` booking (transactional, validated against active status, qualification, and schedule conflicts; the booking keeps its slot and price snapshot), and technicians progress their own jobs `assigned → in_progress → completed`. Milestones 1–11 are complete with CI green. Search/filtering/performance work, Redis caching, payments, and AI features are not implemented yet.
+Milestone 12 (search, filtering, pagination, and performance) is complete: one shared list contract (`page`/`limit`/`sort`/status filter, `paginationMeta`) across every collection endpoint. Customer and technician booking lists gained DB-side pagination + filtering (previously unbounded); operations technicians gained sorting. Deterministic `id`-tiebroken ordering, server-bounded params (`422`, no clamping), no client-supplied Prisma filters. Query plans measured on ~3k bookings — existing indexes cover every list query sub-millisecond, so no index was added. Milestones 1–12 are complete with CI green. Redis caching, payments, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

@@ -8,6 +8,7 @@ import type {
   OperationsStatusTarget,
   OperationsTechnicianList,
   OperationsTechnicianResponse,
+  OperationsTechnicianSort,
 } from '@aisbp/shared';
 import { apiRequest } from '../../lib/api';
 
@@ -46,11 +47,13 @@ export const operationsApi = {
   listTechnicians: (query: {
     active?: boolean | undefined;
     q?: string | undefined;
+    sort?: OperationsTechnicianSort | undefined;
     page?: number;
   }) => {
     const params = new URLSearchParams();
     if (query.active !== undefined) params.set('active', String(query.active));
     if (query.q) params.set('q', query.q);
+    if (query.sort) params.set('sort', query.sort);
     if (query.page && query.page > 1) params.set('page', String(query.page));
     const qs = params.toString();
     return apiRequest<OperationsTechnicianList>(

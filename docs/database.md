@@ -270,6 +270,35 @@ scheduledStart)`. Status history is `where { bookingId } order by createdAt` →
   (`where: { id, technicianId }`), transactional, conditional, and records
   `BookingStatusHistory` with the technician's user id.
 
+### Search, filtering & pagination performance (Milestone 12)
+
+- **No schema change, no migration, no new index.** M12 made every list endpoint
+  consistent (`page` / `limit` / `sort` / status filter, shared `paginationMeta`)
+  and added DB-side pagination + a `count` to the customer and technician booking
+  lists, which previously returned unbounded results.
+- **Query plans** were measured against ~3,000 seeded bookings (≈430 per status)
+  with `EXPLAIN (ANALYZE, BUFFERS)` on PostgreSQL 14:
+
+  | Query shape                                                                 | Plan                                                                                         | Execution                           |
+  | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------- |
+  | operations queue — `status = ?` + `createdAt` sort + `LIMIT 20`             | Bitmap Index Scan `Booking_status_idx` → sort → limit                                        | **0.23 ms** (0.66 ms at offset 400) |
+  | operations queue — no filter, `createdAt` sort                              | Seq Scan → top-N heapsort → limit                                                            | 0.86 ms                             |
+  | customer list — `customerId = ?` + `status = ?` + `createdAt` sort          | Index Scan Backward `Booking_customerId_createdAt_idx` + filter                              | **0.04 ms**                         |
+  | technician list — `technicianId = ?` + `status = ?` + `scheduledStart` sort | Index Scan `Booking_scheduledStart_idx` / `Booking_technicianId_scheduledStart_idx` + filter | **0.04 ms**                         |
+  | `count(*) WHERE status = ?`                                                 | Bitmap Index Scan `Booking_status_idx`                                                       | 0.29 ms                             |
+
+- **Index decision — no index added.** The existing `Booking(status)`,
+  `Booking(customerId, createdAt)`, `Booking(technicianId, scheduledStart)`,
+  `Booking(scheduledStart)` indexes serve every list query sub-millisecond at
+  3k rows. The one seq scan (unfiltered operations queue) is a bounded top-N
+  heapsort, not a full sort. A `Booking(status, createdAt)` composite would turn
+  the operations-queue filter+sort into a pure index range scan (no sort at any
+  offset); measured cost does **not** justify it yet. **Deferred** with a clear
+  trigger: revisit once the bookings table passes ~tens of thousands of rows or
+  the operations-queue p95 latency is measured above a few milliseconds.
+- Text `q` search stays `ILIKE` (catalogue and operations); a `pg_trgm` GIN
+  index remains the documented scale-up, out of scope for the MVP.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created

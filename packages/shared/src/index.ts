@@ -6,6 +6,7 @@ export * from './availability.js';
 export * from './booking.js';
 export * from './catalogue.js';
 export * from './operations.js';
+export * from './pagination.js';
 export * from './pricing.js';
 export * from './technician.js';
 

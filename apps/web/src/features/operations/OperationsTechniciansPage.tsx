@@ -1,14 +1,17 @@
 import { useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
+import type { OperationsTechnicianSort } from '@aisbp/shared';
 import { useOpsTechnicians } from './use-operations';
 
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
 export function OperationsTechniciansPage(): ReactElement {
   const [filter, setFilter] = useState<ActiveFilter>('all');
+  const [sort, setSort] = useState<OperationsTechnicianSort>('name_asc');
   const [page, setPage] = useState(1);
   const { status, data, error, refetch } = useOpsTechnicians({
     active: filter === 'all' ? undefined : filter === 'active',
+    sort,
     page,
   });
 
@@ -21,26 +24,40 @@ export function OperationsTechniciansPage(): ReactElement {
         </Link>
       </div>
 
-      <div className="mt-4 flex gap-2 text-sm" role="tablist" aria-label="Filter technicians">
-        {(['all', 'active', 'inactive'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={filter === value}
-            onClick={() => {
-              setFilter(value);
-              setPage(1);
-            }}
-            className={`rounded-lg border px-3 py-1.5 font-medium capitalize ${
-              filter === value
-                ? 'border-slate-900 bg-slate-900 text-white'
-                : 'border-slate-300 bg-white text-slate-700'
-            }`}
-          >
-            {value}
-          </button>
-        ))}
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+        <div className="flex gap-2" role="tablist" aria-label="Filter technicians">
+          {(['all', 'active', 'inactive'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={filter === value}
+              onClick={() => {
+                setFilter(value);
+                setPage(1);
+              }}
+              className={`rounded-lg border px-3 py-1.5 font-medium capitalize ${
+                filter === value
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-300 bg-white text-slate-700'
+              }`}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+        <select
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value as OperationsTechnicianSort);
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-300 px-2 py-1.5"
+          aria-label="Sort technicians"
+        >
+          <option value="name_asc">Name A–Z</option>
+          <option value="name_desc">Name Z–A</option>
+        </select>
       </div>
 
       {status === 'error' ? (

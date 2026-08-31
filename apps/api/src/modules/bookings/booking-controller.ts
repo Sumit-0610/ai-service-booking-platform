@@ -2,7 +2,9 @@ import type { Request, RequestHandler } from 'express';
 import {
   bookingIdParamSchema,
   createBookingSchema,
+  customerBookingsQuerySchema,
   technicianJobStatusSchema,
+  technicianJobsQuerySchema,
 } from '@aisbp/shared';
 import { AppError } from '../../lib/errors.js';
 import { bookingService } from './booking-service.js';
@@ -37,8 +39,9 @@ const create: RequestHandler = async (req, res) => {
 };
 
 const list: RequestHandler = async (req, res) => {
-  const items = await bookingService.listForCustomer(customerId(req));
-  res.status(200).json({ items });
+  const query = customerBookingsQuerySchema.parse(req.query);
+  const result = await bookingService.listForCustomer(customerId(req), query);
+  res.status(200).json(result);
 };
 
 const get: RequestHandler = async (req, res) => {
@@ -60,8 +63,9 @@ const cancel: RequestHandler = async (req, res) => {
 };
 
 const listMineAsTechnician: RequestHandler = async (req, res) => {
-  const items = await bookingService.listForTechnician(technicianId(req));
-  res.status(200).json({ items });
+  const query = technicianJobsQuerySchema.parse(req.query);
+  const result = await bookingService.listForTechnician(technicianId(req), query);
+  res.status(200).json(result);
 };
 
 const getMineAsTechnician: RequestHandler = async (req, res) => {

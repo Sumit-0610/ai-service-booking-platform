@@ -22,6 +22,8 @@ export type {
   CreateBookingResult,
   CancelBookingResult,
   TechnicianJobStatusResult,
+  BookingListSearchParams,
+  BookingListSort,
   OperationsTechnicianSummaryRow,
   OperationsTechnicianDetailRow,
   TechnicianSearchParams,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { bookingStatusSchema, type BookingStatus } from './booking.js';
+import { pageParams, paginationMetaSchema } from './pagination.js';
 import { priceQuoteSchema } from './pricing.js';
 
 /**
@@ -21,7 +22,6 @@ import { priceQuoteSchema } from './pricing.js';
 
 export const OPS_BOOKINGS_PAGE_SIZE_DEFAULT = 20;
 export const OPS_BOOKINGS_PAGE_SIZE_MAX = 100;
-export const OPS_BOOKINGS_PAGE_MAX = 10_000;
 export const OPS_BOOKINGS_QUERY_MAX_LENGTH = 100;
 
 export const operationsBookingSortValues = [
@@ -58,13 +58,10 @@ export const operationsBookingsQuerySchema = z.object({
   from: optionalInstant,
   to: optionalInstant,
   sort: operationsBookingSortSchema,
-  page: z.coerce.number().int().min(1).max(OPS_BOOKINGS_PAGE_MAX).default(1),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(OPS_BOOKINGS_PAGE_SIZE_MAX)
-    .default(OPS_BOOKINGS_PAGE_SIZE_DEFAULT),
+  ...pageParams({
+    defaultLimit: OPS_BOOKINGS_PAGE_SIZE_DEFAULT,
+    maxLimit: OPS_BOOKINGS_PAGE_SIZE_MAX,
+  }),
 });
 export type OperationsBookingsQuery = z.infer<typeof operationsBookingsQuerySchema>;
 export type OperationsBookingsQueryInput = z.input<typeof operationsBookingsQuerySchema>;
@@ -112,14 +109,7 @@ export type OperationsBookingSummary = z.infer<typeof operationsBookingSummarySc
 
 export const operationsBookingListSchema = z.object({
   items: z.array(operationsBookingSummarySchema),
-  pagination: z.object({
-    page: z.number().int(),
-    limit: z.number().int(),
-    total: z.number().int(),
-    totalPages: z.number().int(),
-    hasNextPage: z.boolean(),
-    hasPreviousPage: z.boolean(),
-  }),
+  pagination: paginationMetaSchema,
 });
 export type OperationsBookingList = z.infer<typeof operationsBookingListSchema>;
 

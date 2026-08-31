@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { pageParams, paginationMetaSchema } from './pagination.js';
 import { priceQuoteSchema } from './pricing.js';
 
 /**
@@ -126,6 +127,33 @@ export const createBookingSchema = z
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
 // ---------------------------------------------------------------------------
+// List queries (Milestone 12) — shared shape for the customer & technician lists
+// ---------------------------------------------------------------------------
+
+export const bookingListSortValues = [
+  'created_desc',
+  'created_asc',
+  'scheduled_asc',
+  'scheduled_desc',
+] as const;
+export const bookingListSortSchema = z.enum(bookingListSortValues).default('created_desc');
+export type BookingListSort = z.infer<typeof bookingListSortSchema>;
+
+/** `GET /api/v1/bookings` (customer) — filter by status, sort, page. Unknown
+ * params are ignored; the server builds the Prisma `where` from this allow-list. */
+export const customerBookingsQuerySchema = z.object({
+  status: bookingStatusSchema.optional(),
+  sort: bookingListSortSchema,
+  ...pageParams({ defaultLimit: 10, maxLimit: 50 }),
+});
+export type CustomerBookingsQuery = z.infer<typeof customerBookingsQuerySchema>;
+export type CustomerBookingsQueryInput = z.input<typeof customerBookingsQuerySchema>;
+
+/** `GET /api/v1/technician/bookings` — same shape as the customer list. */
+export const technicianJobsQuerySchema = customerBookingsQuerySchema;
+export type TechnicianJobsQuery = CustomerBookingsQuery;
+
+// ---------------------------------------------------------------------------
 // Response DTOs
 // ---------------------------------------------------------------------------
 
@@ -158,7 +186,10 @@ export const bookingSchema = z.object({
 });
 export type Booking = z.infer<typeof bookingSchema>;
 
-export const bookingListSchema = z.object({ items: z.array(bookingSchema) });
+export const bookingListSchema = z.object({
+  items: z.array(bookingSchema),
+  pagination: paginationMetaSchema,
+});
 export type BookingList = z.infer<typeof bookingListSchema>;
 
 export const bookingResponseSchema = z.object({ booking: bookingSchema });
@@ -190,5 +221,8 @@ export const technicianBookingSchema = z.object({
 });
 export type TechnicianBooking = z.infer<typeof technicianBookingSchema>;
 
-export const technicianBookingListSchema = z.object({ items: z.array(technicianBookingSchema) });
+export const technicianBookingListSchema = z.object({
+  items: z.array(technicianBookingSchema),
+  pagination: paginationMetaSchema,
+});
 export type TechnicianBookingList = z.infer<typeof technicianBookingListSchema>;

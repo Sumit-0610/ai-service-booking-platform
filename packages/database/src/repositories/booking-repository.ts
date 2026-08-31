@@ -92,6 +92,31 @@ export type TechnicianJobStatusResult =
   | { outcome: 'invalid_transition'; from: BookingStatus }
   | { outcome: 'conflict' };
 
+export type BookingListSort = 'created_desc' | 'created_asc' | 'scheduled_asc' | 'scheduled_desc';
+
+/** Shared params for the owner-scoped booking lists (customer / technician). */
+export interface BookingListSearchParams {
+  status?: BookingStatus | undefined;
+  sort: BookingListSort;
+  skip: number;
+  take: number;
+}
+
+/** Deterministic ordering with an `id` tiebreaker so pages never overlap. */
+function bookingListOrderBy(sort: BookingListSort): Prisma.BookingOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'created_asc':
+      return [{ createdAt: 'asc' }, { id: 'asc' }];
+    case 'scheduled_asc':
+      return [{ scheduledStart: 'asc' }, { id: 'asc' }];
+    case 'scheduled_desc':
+      return [{ scheduledStart: 'desc' }, { id: 'asc' }];
+    case 'created_desc':
+    default:
+      return [{ createdAt: 'desc' }, { id: 'asc' }];
+  }
+}
+
 export interface CreateBookingData {
   customerId: string;
   slotId: string;
@@ -215,12 +240,24 @@ export const bookingRepository = {
     }
   },
 
-  listForCustomer(customerId: string): Promise<CustomerBookingRow[]> {
-    return prisma.booking.findMany({
-      where: { customerId },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: customerBookingSelect,
-    });
+  async searchForCustomer(
+    params: BookingListSearchParams & { customerId: string },
+  ): Promise<{ items: CustomerBookingRow[]; total: number }> {
+    const where: Prisma.BookingWhereInput = { customerId: params.customerId };
+    if (params.status) {
+      where.status = params.status;
+    }
+    const [items, total] = await prisma.$transaction([
+      prisma.booking.findMany({
+        where,
+        orderBy: bookingListOrderBy(params.sort),
+        select: customerBookingSelect,
+        skip: params.skip,
+        take: params.take,
+      }),
+      prisma.booking.count({ where }),
+    ]);
+    return { items, total };
   },
 
   findForCustomer(id: string, customerId: string): Promise<CustomerBookingRow | null> {
@@ -289,12 +326,24 @@ export const bookingRepository = {
     });
   },
 
-  listForTechnician(technicianId: string): Promise<TechnicianBookingRow[]> {
-    return prisma.booking.findMany({
-      where: { technicianId },
-      orderBy: [{ scheduledStart: 'asc' }, { id: 'asc' }],
-      select: technicianBookingSelect,
-    });
+  async searchForTechnician(
+    params: BookingListSearchParams & { technicianId: string },
+  ): Promise<{ items: TechnicianBookingRow[]; total: number }> {
+    const where: Prisma.BookingWhereInput = { technicianId: params.technicianId };
+    if (params.status) {
+      where.status = params.status;
+    }
+    const [items, total] = await prisma.$transaction([
+      prisma.booking.findMany({
+        where,
+        orderBy: bookingListOrderBy(params.sort),
+        select: technicianBookingSelect,
+        skip: params.skip,
+        take: params.take,
+      }),
+      prisma.booking.count({ where }),
+    ]);
+    return { items, total };
   },
 
   /** One job in full, only if it is assigned to this technician. */

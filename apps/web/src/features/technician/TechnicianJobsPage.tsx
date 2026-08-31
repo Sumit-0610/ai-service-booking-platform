@@ -1,6 +1,6 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
-import type { BookingStatus } from '@aisbp/shared';
+import { bookingStatusValues, type BookingStatus } from '@aisbp/shared';
 import { useTechnicianJobs } from './use-technician';
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -24,11 +24,35 @@ function formatWhen(iso: string): string {
 }
 
 export function TechnicianJobsPage(): ReactElement {
-  const { status, profile, jobs, error, refetch } = useTechnicianJobs();
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | ''>('');
+  const [page, setPage] = useState(1);
+  const { status, profile, jobs, pagination, error, refetch } = useTechnicianJobs({
+    status: statusFilter || undefined,
+    sort: 'scheduled_asc',
+    page,
+  });
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-bold text-slate-900">Your jobs</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-900">Your jobs</h1>
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as BookingStatus | '');
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+          aria-label="Filter by status"
+        >
+          <option value="">All statuses</option>
+          {bookingStatusValues.map((s) => (
+            <option key={s} value={s}>
+              {s.replace('_', ' ')}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {status === 'loading' ? (
         <div className="mt-6 space-y-3" aria-busy="true" aria-label="Loading jobs">
@@ -70,7 +94,9 @@ export function TechnicianJobsPage(): ReactElement {
           ) : null}
 
           {jobs.length === 0 ? (
-            <p className="mt-6 text-sm text-slate-600">You have no jobs yet.</p>
+            <p className="mt-6 text-sm text-slate-600">
+              {statusFilter ? 'No jobs match this filter.' : 'You have no jobs yet.'}
+            </p>
           ) : (
             <ul className="mt-6 space-y-4">
               {jobs.map((job) => (
@@ -101,6 +127,32 @@ export function TechnicianJobsPage(): ReactElement {
               ))}
             </ul>
           )}
+
+          {pagination.totalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+              <span>
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={!pagination.hasPreviousPage}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={!pagination.hasNextPage}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
     </main>

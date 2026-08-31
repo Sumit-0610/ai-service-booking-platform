@@ -42,6 +42,7 @@ export type OperationsTechnicianDetailRow = Prisma.TechnicianGetPayload<{
 export interface TechnicianSearchParams {
   active?: boolean | undefined;
   q?: string | undefined;
+  sort: 'name_asc' | 'name_desc';
   skip: number;
   take: number;
 }
@@ -108,7 +109,7 @@ export const technicianRepository = {
     const [rows, total] = await prisma.$transaction([
       prisma.technician.findMany({
         where,
-        orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+        orderBy: [{ displayName: params.sort === 'name_desc' ? 'desc' : 'asc' }, { id: 'asc' }],
         select: opsSummarySelect,
         skip: params.skip,
         take: params.take,

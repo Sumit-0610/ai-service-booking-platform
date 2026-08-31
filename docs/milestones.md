@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 12: Search, filtering, pagination, and performance — not started.**
+**Milestone 13: Redis caching — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–11 are complete with CI green on `origin/main`.
+Milestones 1–12 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -151,10 +151,22 @@ UI and a technician jobs UI. One migration
 (`20260901120000_technician_service`). See [API Boundaries](api.md),
 [Database](database.md), and [Security Strategy](security.md).
 
-### M12: Search, filtering, pagination, and performance
+### M12: Search, filtering, pagination, and performance — complete
 
-Consistent search, filtering, sorting, and pagination across list endpoints,
-with measured performance work.
+One shared list contract (`@aisbp/shared/pagination`: `pageParams`,
+`paginationMeta`, `pageOffset`) applied across every collection endpoint.
+`GET /api/v1/bookings` and `GET /api/v1/technician/bookings` gained DB-side
+pagination + status filter + `sort` (they previously returned unbounded lists);
+`GET /api/v1/operations/technicians` gained `sort`; catalogue / operations
+bookings keep their contracts but now use the shared helper. Deterministic
+`id`-tiebroken ordering, server-bounded `page`/`limit` (`422`, no clamping),
+closed `sort`/filter enums, no client-supplied Prisma filters. Query plans
+measured on ~3k bookings — existing indexes cover every list query
+sub-millisecond, **no index added** (a `Booking(status, createdAt)` composite is
+a documented deferred optimization). No schema change. See
+[API Boundaries](api.md#list-conventions-milestone-12),
+[Database](database.md#search-filtering--pagination-performance-milestone-12),
+and [Security Strategy](security.md).
 
 ### M13: Redis caching
 

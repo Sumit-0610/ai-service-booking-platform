@@ -44,17 +44,31 @@ function booking(overrides: Partial<Booking> = {}): Booking {
   };
 }
 
+function list(items: unknown[], page = 1, total = items.length) {
+  return {
+    items,
+    pagination: {
+      page,
+      limit: 10,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / 10),
+      hasNextPage: page * 10 < total,
+      hasPreviousPage: page > 1,
+    },
+  };
+}
+
 interface Handlers {
-  list?: () => Response;
+  list?: (url: URL) => Response;
   cancel?: () => Response;
   history?: () => Response;
 }
 
 function mockApi(h: Handlers = {}) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
-    const url = String(input);
+    const url = new URL(String(input), 'http://api.test');
     const method = init?.method ?? 'GET';
-    if (url.includes('/status-history')) {
+    if (String(input).includes('/status-history')) {
       return Promise.resolve(
         h.history?.() ??
           json({
@@ -69,11 +83,11 @@ function mockApi(h: Handlers = {}) {
           }),
       );
     }
-    if (url.includes('/cancel') && method === 'POST') {
+    if (url.pathname.includes('/cancel') && method === 'POST') {
       return Promise.resolve(h.cancel?.() ?? json({ booking: booking({ status: 'cancelled' }) }));
     }
-    if (url.includes('/api/v1/bookings')) {
-      return Promise.resolve(h.list?.() ?? json({ items: [booking()] }));
+    if (url.pathname === '/api/v1/bookings') {
+      return Promise.resolve(h.list?.(url) ?? json(list([booking()])));
     }
     return Promise.resolve(json({ error: { code: 'UNKNOWN', message: 'x' } }, 500));
   });
@@ -90,16 +104,19 @@ describe('BookingsPage', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('lists bookings with status and total', async () => {
-    mockApi({ list: () => json({ items: [booking()] }) });
+    mockApi({ list: () => json(list([booking()])) });
     renderPage();
 
     expect(await screen.findByText('Washing Machine Installation')).toBeInTheDocument();
-    expect(screen.getByText('pending')).toBeInTheDocument();
     expect(screen.getByText('$89.00')).toBeInTheDocument();
+    // status badge shows within a rounded pill
+    expect(screen.getAllByText('pending').some((el) => el.className.includes('rounded-full'))).toBe(
+      true,
+    );
   });
 
   it('shows an empty state', async () => {
-    mockApi({ list: () => json({ items: [] }) });
+    mockApi({ list: () => json(list([])) });
     renderPage();
     expect(await screen.findByText(/you have no bookings yet/i)).toBeInTheDocument();
   });
@@ -108,6 +125,27 @@ describe('BookingsPage', () => {
     mockApi({ list: () => json({ error: { code: 'INTERNAL', message: 'boom' } }, 500) });
     renderPage();
     expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t load your bookings/i);
+  });
+
+  it('sends the status filter and paginates', async () => {
+    const fetchMock = mockApi({
+      list: (url) => {
+        const page = Number(url.searchParams.get('page') ?? '1');
+        return json(list([booking({ id: `p${page}` })], page, 30));
+      },
+    });
+    renderPage();
+    await screen.findByText('Washing Machine Installation');
+
+    await userEvent.selectOptions(screen.getByLabelText(/filter by status/i), 'completed');
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('status=completed'))).toBe(true);
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('page=2'))).toBe(true);
+    });
   });
 
   it('cancels a cancellable booking and refetches', async () => {
@@ -125,15 +163,16 @@ describe('BookingsPage', () => {
     });
     // list was refetched (more than the initial GET)
     await waitFor(() => {
-      const listGets = fetchMock.mock.calls.filter(
-        ([u, i]) => String(u).endsWith('/api/v1/bookings') && (i?.method ?? 'GET') === 'GET',
-      );
+      const listGets = fetchMock.mock.calls.filter(([u, i]) => {
+        const p = new URL(String(u), 'http://api.test').pathname;
+        return p === '/api/v1/bookings' && (i?.method ?? 'GET') === 'GET';
+      });
       expect(listGets.length).toBeGreaterThanOrEqual(2);
     });
   });
 
   it('hides cancel for a completed booking and shows its timeline', async () => {
-    mockApi({ list: () => json({ items: [booking({ status: 'completed' })] }) });
+    mockApi({ list: () => json(list([booking({ status: 'completed' })])) });
     renderPage();
 
     await screen.findByText('Washing Machine Installation');

@@ -6,6 +6,8 @@ import {
 } from '@aisbp/database';
 import {
   bookingPriceSchema,
+  pageOffset,
+  paginationMeta,
   priceBreakdownSchema,
   type AssignableTechnician,
   type AssignTechnicianInput,
@@ -106,24 +108,16 @@ export const technicianService = {
   // -------------------------------------------------------------------------
 
   async list(query: OperationsTechniciansQuery): Promise<OperationsTechnicianList> {
-    const skip = (query.page - 1) * query.limit;
     const { items, total } = await repositories.technicians.listForOperations({
       active: query.active,
       q: query.q,
-      skip,
+      sort: query.sort,
+      skip: pageOffset(query.page, query.limit),
       take: query.limit,
     });
-    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
     return {
       items: items.map(toSummary),
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages,
-        hasNextPage: query.page < totalPages,
-        hasPreviousPage: query.page > 1,
-      },
+      pagination: paginationMeta(query.page, query.limit, total),
     };
   },
 

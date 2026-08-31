@@ -5,6 +5,8 @@ import {
 } from '@aisbp/database';
 import {
   bookingPriceSchema,
+  pageOffset,
+  paginationMeta,
   priceBreakdownSchema,
   type OperationsBooking,
   type OperationsBookingList,
@@ -99,27 +101,18 @@ export const operationsService = {
   },
 
   async listBookings(query: OperationsBookingsQuery): Promise<OperationsBookingList> {
-    const skip = (query.page - 1) * query.limit;
     const { items, total } = await repositories.operations.searchBookings({
       status: query.status,
       q: query.q,
       from: query.from,
       to: query.to,
       sort: query.sort,
-      skip,
+      skip: pageOffset(query.page, query.limit),
       take: query.limit,
     });
-    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
     return {
       items: items.map(toSummary),
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages,
-        hasNextPage: query.page < totalPages,
-        hasPreviousPage: query.page > 1,
-      },
+      pagination: paginationMeta(query.page, query.limit, total),
     };
   },
 

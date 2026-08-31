@@ -215,6 +215,23 @@
   email. `:id` params are validated against `[A-Za-z0-9-]{8,64}` before any
   query.
 
+## List Query Security (Milestone 12)
+
+- Every list endpoint's `page` / `limit` / `sort` / filter params are parsed
+  through a shared Zod contract. `page` and `limit` are bounded server-side
+  (`limit` ≤ 50–100 per endpoint, `page` ≤ 10000); an out-of-range value is
+  `422`, never silently clamped. `sort` and status filters are closed enums —
+  an unknown value is `422`.
+- Unknown query keys are ignored; no client-supplied `where`, `select`,
+  `orderBy`, or field name ever reaches Prisma. The server builds the query from
+  the allow-list only. (Verified: `?customerId=…&where[id]=…&select=password`
+  returns the caller's own empty/normal page.)
+- Adding pagination did not change any ownership check: the customer list is
+  still `where: { customerId }`, the technician list `where: { technicianId }`,
+  and operations lists remain role-gated. No DTO gained an internal field.
+- `count` and the page query share one filter and one DB snapshot, so totals
+  and pages are consistent and no unbounded query is issued.
+
 ## API Validation
 
 Use Zod schemas for:

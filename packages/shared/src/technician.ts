@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { bookingStatusEventSchema, technicianBookingSchema } from './booking.js';
+import { pageParams, paginationMetaSchema } from './pagination.js';
 
 /**
  * Shared contracts for technician management and assignment (Milestone 11).
@@ -30,7 +31,12 @@ export const technicianServiceParamSchema = z.object({
 
 export const OPS_TECHNICIANS_PAGE_SIZE_DEFAULT = 20;
 export const OPS_TECHNICIANS_PAGE_SIZE_MAX = 100;
-export const OPS_TECHNICIANS_PAGE_MAX = 10_000;
+
+export const operationsTechnicianSortValues = ['name_asc', 'name_desc'] as const;
+export const operationsTechnicianSortSchema = z
+  .enum(operationsTechnicianSortValues)
+  .default('name_asc');
+export type OperationsTechnicianSort = z.infer<typeof operationsTechnicianSortSchema>;
 
 const optionalText = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
@@ -52,13 +58,11 @@ const optionalBool = z.preprocess(
 export const operationsTechniciansQuerySchema = z.object({
   active: optionalBool,
   q: optionalText,
-  page: z.coerce.number().int().min(1).max(OPS_TECHNICIANS_PAGE_MAX).default(1),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(OPS_TECHNICIANS_PAGE_SIZE_MAX)
-    .default(OPS_TECHNICIANS_PAGE_SIZE_DEFAULT),
+  sort: operationsTechnicianSortSchema,
+  ...pageParams({
+    defaultLimit: OPS_TECHNICIANS_PAGE_SIZE_DEFAULT,
+    maxLimit: OPS_TECHNICIANS_PAGE_SIZE_MAX,
+  }),
 });
 export type OperationsTechniciansQuery = z.infer<typeof operationsTechniciansQuerySchema>;
 export type OperationsTechniciansQueryInput = z.input<typeof operationsTechniciansQuerySchema>;
@@ -120,14 +124,7 @@ export type OperationsTechnicianSummary = z.infer<typeof operationsTechnicianSum
 
 export const operationsTechnicianListSchema = z.object({
   items: z.array(operationsTechnicianSummarySchema),
-  pagination: z.object({
-    page: z.number().int(),
-    limit: z.number().int(),
-    total: z.number().int(),
-    totalPages: z.number().int(),
-    hasNextPage: z.boolean(),
-    hasPreviousPage: z.boolean(),
-  }),
+  pagination: paginationMetaSchema,
 });
 export type OperationsTechnicianList = z.infer<typeof operationsTechnicianListSchema>;
 

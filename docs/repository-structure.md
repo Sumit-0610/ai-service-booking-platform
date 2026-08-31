@@ -87,6 +87,11 @@ ai-service-booking-platform/
 - Application feature code belongs under `apps/web/src/features` or `apps/api/src/modules`.
 - Cross-cutting backend helpers belong under `apps/api/src/shared` only when reused by multiple modules.
 - Shared API types and validation schemas may live in `packages/shared` when both frontend and backend use them.
+- `packages/shared/src/pagination.ts` (Milestone 12) is the single source of the
+  `page` / `limit` query params, the `paginationMeta` response block, and the
+  `paginationMeta()` / `pageOffset()` helpers; every list endpoint (catalogue,
+  bookings, technician jobs, operations bookings, operations technicians) builds
+  its list contract from it.
 - Prisma schema, migrations, seed script, and the data-access layer belong in `packages/database`. Nothing else imports Prisma or the generated client directly.
 - Documentation belongs in `docs` and should be updated when architectural decisions change.
 

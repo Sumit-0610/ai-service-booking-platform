@@ -13,6 +13,15 @@ Performance work should be measurable. Do not claim improvements or metrics with
 - Use Prisma `select` deliberately.
 - Use transactions only where consistency requires them.
 
+### Measured (Milestone 12)
+
+Every list endpoint now paginates via one shared contract
+(`@aisbp/shared/pagination`). `EXPLAIN (ANALYZE, BUFFERS)` on ~3,000 seeded
+bookings showed all list queries running sub-millisecond on the existing
+indexes; **no index was added**. The query plans and the deferred
+`Booking(status, createdAt)` composite (with its trigger condition) are recorded
+in [Database](database.md#search-filtering--pagination-performance-milestone-12).
+
 Important indexed access patterns:
 
 - services by active status, category, and slug

@@ -23,6 +23,27 @@ Filtering uses an explicit, per-endpoint allow-list of query parameters. Unknown
 parameters are ignored; no client-supplied filter is ever passed to the
 database.
 
+### List conventions (Milestone 12)
+
+Every collection endpoint shares one contract, backed by
+`@aisbp/shared`'s `pageParams` / `paginationMeta`:
+
+| Aspect       | Rule                                                                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `page`       | integer ≥ 1, ≤ 10000; out of range → `422` (never clamped)                                                                                                                           |
+| `limit`      | integer ≥ 1, per-endpoint cap (catalogue 48, operations 100, customer & technician lists 50); out of range → `422`                                                                   |
+| `sort`       | a closed `enum`; an unknown value → `422`. Every ordering ends with an `id` tiebreaker, so pages never overlap or skip rows and repeating a request returns the same order           |
+| filters      | a fixed allow-list per endpoint; an unknown status/filter value → `422`; unknown query keys are ignored; **no** client `where` / `select` / `orderBy` / field name reaches Prisma    |
+| `pagination` | `{ page, limit, total, totalPages, hasNextPage, hasPreviousPage }` from a single `count` alongside the page query (one snapshot); a page past the end is an empty page, not an error |
+| performance  | the page and its `count` run against the same DB indexes; no application-side filtering of result sets; no N+1                                                                       |
+
+Paginated endpoints: `GET /api/v1/services`, `GET /api/v1/bookings`,
+`GET /api/v1/technician/bookings`, `GET /api/v1/operations/bookings`,
+`GET /api/v1/operations/technicians`. `GET /api/v1/categories` and the
+availability endpoints are intentionally window-/scope-bounded instead (a
+handful of categories; a bounded date window for slots) — see
+[Availability](#availability--scheduling-implemented--milestone-7).
+
 Standard error shape (implemented):
 
 ```json
@@ -280,12 +301,17 @@ Every query is scoped to the caller's own id in the repository. Mutations
 require a CSRF token.
 
 ```txt
-GET  /api/v1/bookings                       -> 200 { items: Booking[] }
+GET  /api/v1/bookings                       -> 200 { items: Booking[], pagination }
 POST /api/v1/bookings                       -> 201 { booking }         (X-CSRF-Token)
 GET  /api/v1/bookings/:id                   -> 200 { booking } | 404
 GET  /api/v1/bookings/:id/status-history    -> 200 { items: StatusEvent[] } | 404
 POST /api/v1/bookings/:id/cancel            -> 200 { booking } | 404 | 409  (X-CSRF-Token)
 ```
+
+`GET /api/v1/bookings` query params (Milestone 12): `status` (one of the 7
+booking statuses), `sort` (`created_desc` \| `created_asc` \| `scheduled_asc` \|
+`scheduled_desc`, default `created_desc`), `page` (≥ 1, ≤ 10000), `limit` (1–50,
+default 10). See [List conventions](#list-conventions-milestone-12).
 
 `Booking` (customer DTO — no user ids, no raw model):
 
@@ -358,10 +384,13 @@ encodes them.
 
 ```txt
 GET   /api/v1/technician/profile             -> 200 { profile }
-GET   /api/v1/technician/bookings            -> 200 { items: TechnicianBooking[] }
+GET   /api/v1/technician/bookings            -> 200 { items: TechnicianBooking[], pagination }
 GET   /api/v1/technician/bookings/:id        -> 200 { booking: TechnicianJob } | 404
 PATCH /api/v1/technician/bookings/:id/status -> 200 { booking } | 404 | 409   (X-CSRF-Token)
 ```
+
+`GET /api/v1/technician/bookings` takes the same `status` / `sort` / `page` /
+`limit` params as `GET /api/v1/bookings` (Milestone 12).
 
 `requireAuth -> requireRole('technician') -> loadTechnician`. Ownership is
 `authenticated user -> Technician.userId -> Technician.id -> Booking.technicianId`,
@@ -484,6 +513,7 @@ POST   /api/v1/operations/bookings/:id/assign-technician      -> 200 { booking }
 ```
 
 - **Technician list** — query `active` (bool), `q` (name / email substring),
+  `sort` (`name_asc` \| `name_desc`, default `name_asc` — Milestone 12),
   `page` (≤ 10000), `limit` (1–100, default 20). `TechnicianSummary` =
   `{ id, displayName, serviceArea, active, name, email, qualifiedServiceCount,
 activeAssignmentCount }`. No password hash, no user internals. Detail adds

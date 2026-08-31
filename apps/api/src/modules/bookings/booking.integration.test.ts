@@ -439,6 +439,118 @@ describe('POST /api/v1/bookings/:id/cancel', () => {
   });
 });
 
+describe('GET /api/v1/bookings — search, filter, pagination (Milestone 12)', () => {
+  async function seedBookings(customer: Customer, n: number): Promise<string[]> {
+    const ids: string[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const slotId = await makeSlot({ serviceId: activeServiceId });
+      const res = await post('/api/v1/bookings', customer.cookies, {
+        slotId,
+        addressId: customer.addressId,
+      });
+      expect(res.status).toBe(201);
+      ids.push(res.body.booking.id);
+    }
+    return ids;
+  }
+
+  it('paginates with correct metadata and a deterministic order', async () => {
+    const customer = await makeCustomer('p1');
+    await seedBookings(customer, 5);
+
+    const p1 = await agent()
+      .get('/api/v1/bookings?limit=2&page=1&sort=created_asc')
+      .set('Cookie', customer.cookies.header);
+    expect(p1.status).toBe(200);
+    expect(p1.body.items).toHaveLength(2);
+    expect(p1.body.pagination).toEqual({
+      page: 1,
+      limit: 2,
+      total: 5,
+      totalPages: 3,
+      hasNextPage: true,
+      hasPreviousPage: false,
+    });
+
+    const p2 = await agent()
+      .get('/api/v1/bookings?limit=2&page=2&sort=created_asc')
+      .set('Cookie', customer.cookies.header);
+    const p3 = await agent()
+      .get('/api/v1/bookings?limit=2&page=3&sort=created_asc')
+      .set('Cookie', customer.cookies.header);
+    expect(p3.body.items).toHaveLength(1);
+    expect(p3.body.pagination).toMatchObject({ hasNextPage: false, hasPreviousPage: true });
+
+    const ids = [p1, p2, p3].flatMap((r) => r.body.items.map((b: { id: string }) => b.id));
+    expect(new Set(ids).size).toBe(5); // no overlap / skips
+
+    // page past the end -> empty, not an error
+    const past = await agent()
+      .get('/api/v1/bookings?limit=2&page=9')
+      .set('Cookie', customer.cookies.header);
+    expect(past.status).toBe(200);
+    expect(past.body.items).toEqual([]);
+    expect(past.body.pagination.hasNextPage).toBe(false);
+
+    // repeat page 1 -> identical order
+    const p1again = await agent()
+      .get('/api/v1/bookings?limit=2&page=1&sort=created_asc')
+      .set('Cookie', customer.cookies.header);
+    expect(p1again.body.items.map((b: { id: string }) => b.id)).toEqual(
+      p1.body.items.map((b: { id: string }) => b.id),
+    );
+  });
+
+  it('filters by status and sorts both directions', async () => {
+    const customer = await makeCustomer('p2');
+    const ids = await seedBookings(customer, 3);
+    const cancelledId = ids[0]!;
+    await prisma.booking.update({ where: { id: cancelledId }, data: { status: 'cancelled' } });
+
+    const pending = await agent()
+      .get('/api/v1/bookings?status=pending')
+      .set('Cookie', customer.cookies.header);
+    expect(pending.body.items.every((b: { status: string }) => b.status === 'pending')).toBe(true);
+    expect(pending.body.pagination.total).toBe(2);
+
+    const cancelled = await agent()
+      .get('/api/v1/bookings?status=cancelled')
+      .set('Cookie', customer.cookies.header);
+    expect(cancelled.body.items.map((b: { id: string }) => b.id)).toEqual([cancelledId]);
+
+    const asc = await agent()
+      .get('/api/v1/bookings?sort=created_asc')
+      .set('Cookie', customer.cookies.header);
+    const desc = await agent()
+      .get('/api/v1/bookings?sort=created_desc')
+      .set('Cookie', customer.cookies.header);
+    expect(asc.body.items.map((b: { id: string }) => b.id)).toEqual(
+      [...desc.body.items].reverse().map((b: { id: string }) => b.id),
+    );
+  });
+
+  it('rejects invalid pagination / filter / sort values with 422 and ignores unknown params', async () => {
+    const customer = await makeCustomer('p3');
+    for (const q of [
+      '?limit=0',
+      '?limit=51',
+      '?page=0',
+      '?page=abc',
+      '?status=nonsense',
+      '?sort=weird',
+    ]) {
+      const res = await agent().get(`/api/v1/bookings${q}`).set('Cookie', customer.cookies.header);
+      expect(res.status, q).toBe(422);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
+    const injected = await agent()
+      .get('/api/v1/bookings?customerId=someone&where[id]=x&select=password')
+      .set('Cookie', customer.cookies.header);
+    expect(injected.status).toBe(200);
+    expect(injected.body.items).toEqual([]);
+  });
+});
+
 describe('technician booking visibility', () => {
   it("shows the job to the slot's technician only, and denies customers / anon", async () => {
     const customer = await makeCustomer('t1');

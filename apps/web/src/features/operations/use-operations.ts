@@ -5,6 +5,7 @@ import type {
   OperationsDashboard,
   OperationsTechnician,
   OperationsTechnicianList,
+  OperationsTechnicianSort,
 } from '@aisbp/shared';
 import { ApiError } from '../../lib/api';
 import { operationsApi, type OpsBookingQuery } from './operations-api';
@@ -131,7 +132,11 @@ export function useOpsBooking(id: string): {
   };
 }
 
-export function useOpsTechnicians(query: { active?: boolean | undefined; page: number }): {
+export function useOpsTechnicians(query: {
+  active?: boolean | undefined;
+  sort?: OperationsTechnicianSort | undefined;
+  page: number;
+}): {
   status: AsyncStatus;
   data: OperationsTechnicianList | null;
   error: ApiError | Error | null;
@@ -141,13 +146,13 @@ export function useOpsTechnicians(query: { active?: boolean | undefined; page: n
   const [data, setData] = useState<OperationsTechnicianList | null>(null);
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [nonce, setNonce] = useState(0);
-  const key = `${query.active ?? ''}|${query.page}|${nonce}`;
+  const key = `${query.active ?? ''}|${query.sort ?? ''}|${query.page}|${nonce}`;
 
   useEffect(() => {
     let active = true;
     setStatus('loading');
     operationsApi
-      .listTechnicians({ active: query.active, page: query.page })
+      .listTechnicians({ active: query.active, sort: query.sort, page: query.page })
       .then((response) => {
         if (!active) return;
         setData(response);

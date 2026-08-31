@@ -1,4 +1,5 @@
 import { repositories, type CatalogueCategoryRow, type CatalogueServiceRow } from '@aisbp/database';
+import { pageOffset, paginationMeta } from '@aisbp/shared';
 import type {
   CatalogueCategory,
   CatalogueQuery,
@@ -31,27 +32,16 @@ export const catalogueService = {
   },
 
   async listServices(query: CatalogueQuery): Promise<CatalogueServiceList> {
-    const skip = (query.page - 1) * query.limit;
     const { items, total } = await repositories.catalog.searchActiveServices({
       q: query.q,
       categorySlug: query.category,
       sort: query.sort,
-      skip,
+      skip: pageOffset(query.page, query.limit),
       take: query.limit,
     });
-
-    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
-
     return {
       items: items.map(toService),
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages,
-        hasNextPage: query.page < totalPages,
-        hasPreviousPage: query.page > 1,
-      },
+      pagination: paginationMeta(query.page, query.limit, total),
     };
   },
 
