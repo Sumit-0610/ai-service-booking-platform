@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { SiteHeader } from './components/SiteHeader';
 import { AddressesPage } from './features/addresses/AddressesPage';
 import { AccountPage } from './features/auth/AccountPage';
+import { BookingsPage } from './features/bookings/BookingsPage';
 import { TechnicianAvailabilityPage } from './features/availability/TechnicianAvailabilityPage';
 import { AuthProvider } from './features/auth/AuthProvider';
 import { LoginPage } from './features/auth/LoginPage';
@@ -36,6 +37,14 @@ export function App(): ReactElement {
               element={
                 <ProtectedRoute roles={['customer']}>
                   <AddressesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/account/bookings"
+              element={
+                <ProtectedRoute roles={['customer']}>
+                  <BookingsPage />
                 </ProtectedRoute>
               }
             />

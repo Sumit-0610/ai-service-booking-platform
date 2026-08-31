@@ -91,7 +91,7 @@ export function ServiceDetailPage(): ReactElement {
 
       <PriceQuoteCard priceCents={service.priceCents} currency={service.currency} />
 
-      <ServiceAvailability slug={service.slug} />
+      <ServiceAvailability service={service} />
     </main>
   );
 }

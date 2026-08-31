@@ -11,6 +11,7 @@ import {
   publicAvailabilityRouter,
   technicianAvailabilityRouter,
 } from './modules/availability/availability-routes.js';
+import { bookingRouter, technicianBookingRouter } from './modules/bookings/booking-routes.js';
 import { catalogueRouter } from './modules/catalogue/catalogue-routes.js';
 import { pricingRouter } from './modules/pricing/pricing-routes.js';
 
@@ -44,7 +45,9 @@ export function createApp() {
 
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/addresses', addressRouter);
+  app.use('/api/v1/bookings', bookingRouter);
   app.use('/api/v1/technician/availability', technicianAvailabilityRouter);
+  app.use('/api/v1/technician/bookings', technicianBookingRouter);
   app.use('/api/v1', catalogueRouter);
   app.use('/api/v1', publicAvailabilityRouter);
   app.use('/api/v1', pricingRouter);

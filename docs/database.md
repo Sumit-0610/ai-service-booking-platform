@@ -191,6 +191,31 @@ startsAt IN [from, to)` ordered by `startsAt`. Served by the existing
   the immutable snapshot is Milestone 9's responsibility (see
   [API Boundaries](api.md#price-snapshot-boundary)).
 
+### Booking workflow (Milestone 9)
+
+- **No schema change, no migration.** `Booking` and `BookingStatusHistory`, and
+  every constraint added in the initial migration (`booking_time_valid`,
+  `booking_price_non_negative`, `booking_price_total_consistent`, the
+  `Booking.slotId` UNIQUE, and the `onDelete: Restrict` foreign keys) are used
+  unchanged.
+- **Double-booking guard**: the `Booking.slotId` UNIQUE index. Creation runs in
+  `prisma.$transaction`; a concurrent create for the same slot loses the
+  `INSERT` race, PostgreSQL aborts its transaction, and the API returns `409`.
+  No `SELECT ... FOR UPDATE`, no application-level lock, no "check then insert".
+- **Price snapshot** is written from the pricing calculation applied to the
+  `Service` row read **inside the booking transaction**, so a concurrent
+  reprice cannot desync it. Once written it is never recomputed — verified by an
+  integration test (book at 10000, reprice to 25000, the booking still reads
+  10000).
+- **Index review**: the customer list is `where { customerId } order by
+createdAt desc` → `Booking(customerId, createdAt)`. The technician list is
+  `where { technicianId } order by scheduledStart` → `Booking(technicianId,
+scheduledStart)`. Status history is `where { bookingId } order by createdAt` →
+  `BookingStatusHistory(bookingId, createdAt)`. All covered; **no new index**.
+- **Slot on cancel**: a cancelled booking keeps its `slotId` link and the slot
+  stays `booked`. Because `Booking.slotId` is UNIQUE, a cancelled slot cannot be
+  re-booked; reclaiming it is an operations concern for a later milestone.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created

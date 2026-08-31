@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 8 (pricing) is in progress: a deterministic pricing calculation (`calculateServicePrice`) and a public live price quote (`GET /api/v1/services/:slug/price`) for active services, returning an explicit `PriceQuote` DTO (integer cents, no fees/tax/discount rules yet), surfaced on the service detail page. Milestones 1–7 are complete with CI green. Booking creation, technician assignment, payments, dashboard, and AI features are not implemented yet.
+Milestone 9 (booking workflow) is in progress: a customer can book an available future slot for one of their own addresses (`POST /api/v1/bookings`) in one transaction — server-side price snapshot, initial status history, slot marked booked, and double-booking prevented by a UNIQUE constraint so concurrent attempts yield exactly one booking. Customers list, view, and cancel their own bookings (with a status timeline); technicians see the jobs on their own slots. Milestones 1–8 are complete with CI green. Booking reschedule, operations confirmation/assignment, the technician job-status flow, payments, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

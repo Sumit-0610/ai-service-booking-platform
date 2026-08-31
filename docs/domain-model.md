@@ -270,6 +270,22 @@ in_progress -> completed
 
 Every transition must be performed by the booking service and recorded in `BookingStatusHistory`.
 
+Notes (Milestone 9):
+
+- A booking is **created as `pending`** by the customer for one of their own
+  addresses on an available future slot. `technicianId` is copied from the slot
+  at creation (booking a technician's slot books that technician's time); this
+  is not the operations "assignment" step, which — with technician profile
+  management and the job-status flow — is Milestone 11.
+- The only transition wired in M9 is **customer cancellation**
+  (`pending | confirmed | assigned -> cancelled`). `pending -> confirmed`,
+  `-> assigned`, `-> in_progress`, `-> completed`, `-> rejected` have no actor
+  yet; operations (M10) and technician (M11) endpoints will drive them. The full
+  actor-gated transition table lives in `@aisbp/shared` (`booking.ts`).
+- The price snapshot is written once, inside the creation transaction, from the
+  pricing calculation. It is never recomputed. Booking **modification /
+  reschedule is not implemented** in M9.
+
 ## Deliberately Deferred Entities
 
 The MVP should not start with a complex pricing rules engine, payment ledger, notification system, or multi-technician assignment model. These can be introduced only when a concrete requirement demands them.

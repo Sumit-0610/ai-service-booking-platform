@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 8: Pricing — in progress.**
+**Milestone 9: Booking workflow — in progress.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–7 are complete with CI green on `origin/main`.
+Milestones 1–8 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -84,7 +84,7 @@ no schema change. Booking is **not** implemented. See [API Boundaries](api.md),
 No booking creation, technician assignment, pricing, or AI work in this
 milestone.
 
-### M8: Pricing — in progress
+### M8: Pricing — complete
 
 Deterministic, pure pricing calculation (`calculateServicePrice` in
 `@aisbp/shared`) and a public live price quote
@@ -99,11 +99,24 @@ breakdown. No schema change. See [API Boundaries](api.md),
 No coupons, promotions, subscriptions, payments, rules engine, or booking
 persistence in this milestone.
 
-### M9: Booking workflow
+### M9: Booking workflow — in progress
 
-Create, modify, and cancel bookings; booking history; booking status timeline;
-transaction-safe slot reservation; stored booking price snapshot; state machine
-enforcement.
+Customer booking creation (`POST /api/v1/bookings`, body `{ slotId, addressId,
+customerNotes? }` only) in one PostgreSQL transaction: address-ownership /
+active-service / available-future-slot revalidation, server-side price snapshot
+from the pricing calculation, initial `BookingStatusHistory`, and the slot
+flipped to `booked`. Double-booking is prevented by the `Booking.slotId` UNIQUE
+constraint — concurrent creates yield exactly one booking, the rest `409`.
+Customer list / detail / status-history / cancel endpoints (own bookings only,
+CSRF on mutations). The documented state machine is enforced; M9 wires only
+customer cancellation. Read-only technician view of jobs on their own slots.
+Customer booking UI on the service detail page plus a bookings page with the
+status timeline. No schema change. See [API Boundaries](api.md),
+[Database](database.md), and [Security Strategy](security.md).
+
+No booking modification / reschedule, operations confirmation / assignment,
+technician job-status flow, payments, notifications, refunds, coupons, reviews,
+or AI in this milestone.
 
 ### M10: Operations dashboard
 

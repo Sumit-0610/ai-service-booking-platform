@@ -271,32 +271,102 @@ resulting figures into the booking's immutable snapshot
 `priceBreakdown`) inside the same transaction that creates the booking. Once
 written, the snapshot never changes, even if `Service.basePriceCents` later does.
 
-## Booking Endpoints (later milestones)
+## Booking Workflow (implemented — Milestone 9)
+
+### Customer endpoints
+
+Authenticated, **customer role only** (operations / technicians get `403`).
+Every query is scoped to the caller's own id in the repository. Mutations
+require a CSRF token.
 
 ```txt
-GET    /api/v1/bookings
-POST   /api/v1/bookings
-GET    /api/v1/bookings/:bookingId
-PATCH  /api/v1/bookings/:bookingId
-POST   /api/v1/bookings/:bookingId/cancel
-GET    /api/v1/bookings/:bookingId/status-history
+GET  /api/v1/bookings                       -> 200 { items: Booking[] }
+POST /api/v1/bookings                       -> 201 { booking }         (X-CSRF-Token)
+GET  /api/v1/bookings/:id                   -> 200 { booking } | 404
+GET  /api/v1/bookings/:id/status-history    -> 200 { items: StatusEvent[] } | 404
+POST /api/v1/bookings/:id/cancel            -> 200 { booking } | 404 | 409  (X-CSRF-Token)
 ```
 
-Booking creation requirements:
+`Booking` (customer DTO — no user ids, no raw model):
 
-- Validate customer ownership of address.
-- Validate selected service is active.
-- Validate selected slot is available.
-- Calculate final MVP pricing through the pricing service.
-- Store price snapshot on the booking.
-- Reserve or mark the slot through the booking service.
-- Create initial status history.
+```jsonc
+{
+  "id": "clbk…",
+  "status": "pending",
+  "service": { "slug": "wifi-mesh-setup", "name": "Wi-Fi Mesh Setup" },
+  "address": {
+    "label": "Home",
+    "line1": "…",
+    "line2": null,
+    "city": "…",
+    "state": "…",
+    "postalCode": "…",
+    "country": "IN",
+  },
+  "scheduledStart": "2026-09-15T09:00:00.000Z",
+  "scheduledEnd": "2026-09-15T11:00:00.000Z",
+  "customerNotes": null,
+  "price": {
+    "currency": "USD",
+    "subtotalCents": 12000,
+    "feesTotalCents": 0,
+    "discountTotalCents": 0,
+    "taxTotalCents": 0,
+    "totalCents": 12000,
+    "breakdown": { "lines": [{ "label": "Service", "amountCents": 12000 }] },
+  },
+  "createdAt": "2026-09-01T12:00:00.000Z",
+}
+```
 
-Booking modification requirements:
+`StatusEvent` = `{ from: BookingStatus | null, to: BookingStatus, reason: string | null, at: <iso> }`.
 
-- Enforce allowed status rules.
-- Revalidate availability if scheduled time changes.
-- Recalculate and resnapshot price only when the modification changes price-affecting fields and the user confirms the new price.
+**Create body** — only `{ slotId, addressId, customerNotes? }`, `.strict()`. The
+service, technician, scheduled time and every price field are derived
+server-side from the slot and the pricing calculation; sending `status`,
+`technicianId`, `customerId`, `serviceId`, `scheduledStart`, or any `price*`
+field is `422`.
+
+Creation runs in **one PostgreSQL transaction** that:
+
+1. confirms the address belongs to the caller (else `422` on `addressId`);
+2. loads the slot and confirms its service is active (`422`), its technician is
+   active, its status is `available` and it has no booking (`409`), and it
+   starts in the future (`422`);
+3. snapshots the price with the pricing calculation from the service row read
+   **in the same transaction**;
+4. inserts the `Booking` (status `pending`, `technicianId` copied from the slot),
+   its initial `BookingStatusHistory` row, and flips the slot to `booked`.
+
+The authoritative double-booking guard is the `Booking.slotId` UNIQUE
+constraint: two concurrent creates for the same slot both pass step 2, but only
+one `INSERT` wins — the other's transaction is aborted by PostgreSQL and the API
+returns `409`. There is **no** race-prone application-level "check then insert".
+
+### Status lifecycle
+
+The documented state machine (see [domain model](domain-model.md#booking-state-machine))
+is the single source of truth. In Milestone 9 a booking is created as `pending`
+and the only wired transition is **customer cancellation**
+(`pending | confirmed | assigned -> cancelled`), which appends a
+`BookingStatusHistory` row atomically. Cancelling from any other state is `409`.
+Operations confirmation/assignment (M10) and the technician job-status flow
+(M11) will drive the remaining transitions; the transition table already
+encodes them.
+
+### Technician endpoints (read-only in M9)
+
+```txt
+GET /api/v1/technician/bookings      -> 200 { items: TechnicianBooking[] }
+GET /api/v1/technician/bookings/:id  -> 200 { booking } | 404
+```
+
+`requireAuth -> requireRole('technician') -> loadTechnician`. Returns only the
+jobs booked into **this technician's own slots** (a booking is linked to a
+technician because the customer booked that technician's availability slot —
+there is no separate assignment step yet). `TechnicianBooking` carries the
+service, customer name, address, schedule and notes, but **not** the price
+snapshot. `PATCH .../status` is deferred to M11.
 
 ## Operations/Admin Endpoints
 

@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactElement } from 'react';
-import type { PublicSlot } from '@aisbp/shared';
+import type { CatalogueService, PublicSlot } from '@aisbp/shared';
+import { BookingPanel } from '../bookings/BookingPanel';
 import {
   formatLocalDate,
   formatLocalTime,
@@ -23,13 +24,17 @@ function groupByLocalDate(
     .map(([key, daySlots]) => ({ key, iso: daySlots[0]!.startsAt, slots: daySlots }));
 }
 
-export function ServiceAvailability({ slug }: { slug: string }): ReactElement {
-  const { status, slots, error, refetch } = useServiceAvailability(slug);
+export function ServiceAvailability({ service }: { service: CatalogueService }): ReactElement {
+  const { status, slots, error, refetch } = useServiceAvailability(service.slug);
   const days = useMemo(() => groupByLocalDate(slots), [slots]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
   const activeDay = days.find((d) => d.key === selectedDate) ?? days[0];
+  const chosenSlot = slots.find((slot) => slot.id === selectedSlot) ?? null;
+  const slotLabel = chosenSlot
+    ? `${formatLocalDate(chosenSlot.startsAt)}, ${formatLocalTime(chosenSlot.startsAt)}–${formatLocalTime(chosenSlot.endsAt)}`
+    : null;
 
   return (
     <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6">
@@ -109,11 +114,17 @@ export function ServiceAvailability({ slug }: { slug: string }): ReactElement {
             </div>
           ) : null}
 
-          <p className="mt-4 text-sm text-slate-500">
-            {selectedSlot
-              ? 'Time selected — online booking opens in a later release.'
-              : 'Select a time — booking coming next.'}
-          </p>
+          <BookingPanel
+            serviceName={service.name}
+            priceCents={service.priceCents}
+            currency={service.currency}
+            slotId={selectedSlot}
+            slotLabel={slotLabel}
+            onBooked={() => {
+              setSelectedSlot(null);
+              refetch();
+            }}
+          />
         </>
       )}
     </section>

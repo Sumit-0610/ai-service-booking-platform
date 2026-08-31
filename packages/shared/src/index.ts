@@ -3,6 +3,7 @@ import { z } from 'zod';
 export * from './address.js';
 export * from './auth.js';
 export * from './availability.js';
+export * from './booking.js';
 export * from './catalogue.js';
 export * from './pricing.js';
 

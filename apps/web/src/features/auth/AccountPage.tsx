@@ -36,13 +36,22 @@ export function AccountPage(): ReactElement {
       </dl>
 
       {user?.role === 'customer' ? (
-        <Link
-          to="/account/addresses"
-          className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
-        >
-          Your addresses
-          <span aria-hidden="true">→</span>
-        </Link>
+        <>
+          <Link
+            to="/account/bookings"
+            className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
+          >
+            Your bookings
+            <span aria-hidden="true">→</span>
+          </Link>
+          <Link
+            to="/account/addresses"
+            className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
+          >
+            Your addresses
+            <span aria-hidden="true">→</span>
+          </Link>
+        </>
       ) : null}
 
       {user?.role === 'technician' ? (

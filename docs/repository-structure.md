@@ -90,11 +90,11 @@ ai-service-booking-platform/
 - Prisma schema, migrations, seed script, and the data-access layer belong in `packages/database`. Nothing else imports Prisma or the generated client directly.
 - Documentation belongs in `docs` and should be updated when architectural decisions change.
 
-As of Milestone 8 the backend has `apps/api/src/{config,lib,middleware,modules,types}`
-with `modules/{auth,session,catalogue,addresses,availability,pricing}`; the
-frontend has `apps/web/src/{components,features}` with
-`features/{auth,catalogue,addresses,availability,pricing}`. Other planned
-directories appear as the milestones that need them land.
+As of Milestone 9 the backend has `apps/api/src/{config,lib,middleware,modules,types}`
+with `modules/{auth,session,catalogue,addresses,availability,pricing,bookings}`;
+the frontend has `apps/web/src/{components,features}` with
+`features/{auth,catalogue,addresses,availability,pricing,bookings}`. Other
+planned directories appear as the milestones that need them land.
 
 ## MVP Constraint
 

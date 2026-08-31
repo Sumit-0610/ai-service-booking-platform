@@ -105,6 +105,41 @@
 - **Malformed slug → 422; unknown → 404**, so probing does not reveal whether a
   given slug exists as an inactive service.
 
+## Booking Workflow Security (implemented — Milestone 9)
+
+- **Access control**: `POST/GET/cancel /api/v1/bookings*` require `requireAuth` +
+  `requireRole('customer')`; operations and technicians get `403`. Technician
+  read endpoints require `requireRole('technician')` + a resolved profile.
+  Mutations require a CSRF token (`403 CSRF_ERROR` without one).
+- **IDOR**: every booking read, cancel and status-history query carries
+  `where: { id, customerId }` (or `{ id, technicianId }`). Another user's
+  booking id returns the same `404` as a missing one; a cross-customer list is
+  empty. Booking `:id` is validated against `[A-Za-z0-9-]{8,64}` before any
+  query.
+- **Mass assignment**: the create body is `.strict()` — only `slotId`,
+  `addressId`, `customerNotes` are accepted. `status`, `technicianId`,
+  `customerId`, `serviceId`, `slotId` aside, `scheduledStart/End`, and every
+  `price*` field are rejected with `422`. The customer is taken from the
+  session; the technician, service, schedule and price come from the slot and
+  the pricing calculation.
+- **Client can never set a price**: all six snapshot figures plus the currency
+  and breakdown are computed server-side inside the booking transaction and
+  written to the immutable snapshot. A repriced service does not change an
+  existing booking.
+- **Address ownership**: booking with an `addressId` the caller does not own is
+  a `422` on `addressId`, indistinguishable from an unknown address.
+- **Inactive service / bad slot**: an inactive service (`422`), an unknown slot
+  (`422`), a past slot (`422`), or an already-booked / non-`available` slot
+  (`409`) cannot be booked.
+- **Concurrency**: the `Booking.slotId` UNIQUE constraint is the authoritative
+  guard. Two concurrent create attempts for the same slot produce exactly one
+  booking (tested); there is no race-prone application-level check.
+- **State machine**: transitions are checked against the documented table and
+  the acting role in `@aisbp/shared`; an invalid transition (e.g. cancelling a
+  cancelled booking) is `409`, never a silent no-op.
+- **Data minimisation**: the customer DTO omits all user ids and the raw model;
+  the technician DTO omits the price snapshot.
+
 ## API Validation
 
 Use Zod schemas for:

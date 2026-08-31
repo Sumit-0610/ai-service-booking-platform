@@ -71,6 +71,15 @@ describe('App routing and auth', () => {
     });
   });
 
+  it('redirects an unauthenticated visit to /account/bookings to the login page', async () => {
+    mockApi();
+    window.history.pushState({}, '', '/account/bookings');
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /log in/i })).toBeInTheDocument();
+    });
+  });
+
   it('redirects an unauthenticated visit to /technician/availability to the login page', async () => {
     mockApi();
     window.history.pushState({}, '', '/technician/availability');
