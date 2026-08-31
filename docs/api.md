@@ -354,19 +354,33 @@ Operations confirmation/assignment (M10) and the technician job-status flow
 (M11) will drive the remaining transitions; the transition table already
 encodes them.
 
-### Technician endpoints (read-only in M9)
+### Technician job endpoints
 
 ```txt
-GET /api/v1/technician/bookings      -> 200 { items: TechnicianBooking[] }
-GET /api/v1/technician/bookings/:id  -> 200 { booking } | 404
+GET   /api/v1/technician/profile             -> 200 { profile }
+GET   /api/v1/technician/bookings            -> 200 { items: TechnicianBooking[] }
+GET   /api/v1/technician/bookings/:id        -> 200 { booking: TechnicianJob } | 404
+PATCH /api/v1/technician/bookings/:id/status -> 200 { booking } | 404 | 409   (X-CSRF-Token)
 ```
 
-`requireAuth -> requireRole('technician') -> loadTechnician`. Returns only the
-jobs booked into **this technician's own slots** (a booking is linked to a
-technician because the customer booked that technician's availability slot —
-there is no separate assignment step yet). `TechnicianBooking` carries the
-service, customer name, address, schedule and notes, but **not** the price
-snapshot. `PATCH .../status` is deferred to M11.
+`requireAuth -> requireRole('technician') -> loadTechnician`. Ownership is
+`authenticated user -> Technician.userId -> Technician.id -> Booking.technicianId`,
+enforced in the repository `where: { id, technicianId }` — another technician's
+job is a `404` (non-enumerating), never a `403`. A booking is linked to a
+technician either because the customer booked that technician's slot (M9) or
+because operations assigned them (M11).
+
+- `profile` = `{ displayName, serviceArea, active, qualifications: [{ slug, name }] }` —
+  read-only; a technician never manages their own record.
+- `TechnicianBooking` / `TechnicianJob` carry service, customer name, address,
+  schedule and notes, but **not** the price snapshot. `TechnicianJob` (detail)
+  adds the `statusHistory` timeline.
+- `PATCH .../status` body — `{ status, reason? }`, `.strict()`; `status` must be
+  `in_progress` or `completed`. The transition is checked against the `technician`
+  actor in the shared state machine (`assigned -> in_progress -> completed`);
+  anything else → `409` or `422`. Transactional conditional update; history
+  recorded with the technician's user id. An **inactive** technician may still
+  progress a job already assigned to them.
 
 ## Operations Dashboard (implemented — Milestone 10)
 
@@ -453,25 +467,62 @@ status change is rejected with `409` rather than lost, and a
 Every figure is a database aggregation (`count` / `groupBy`), never computed by
 loading rows into memory, and never fabricated.
 
-### Later milestones (M11)
+## Technician Management & Assignment (implemented — Milestone 11)
 
-Technician assignment (`confirmed -> assigned`), technician profile / active-status
-management, and the technician job-status flow (`assigned -> in_progress -> completed`)
-are **not** part of Milestone 10.
-
-## Technician Endpoints
+`requireAuth -> requireRole('operations')`, CSRF on mutations. Mounted at
+`/api/v1/operations` (alongside the dashboard router).
 
 ```txt
-GET   /api/v1/technician/bookings
-GET   /api/v1/technician/bookings/:bookingId
-PATCH /api/v1/technician/bookings/:bookingId/status
+GET    /api/v1/operations/technicians                         -> 200 { items: TechnicianSummary[], pagination }
+GET    /api/v1/operations/technicians/:id                     -> 200 { technician } | 404
+PATCH  /api/v1/operations/technicians/:id/status              -> 200 { technician } | 404   (X-CSRF-Token)
+POST   /api/v1/operations/technicians/:id/services            -> 201 { technician } | 404 | 409 | 422   (X-CSRF-Token)
+DELETE /api/v1/operations/technicians/:id/services/:serviceId -> 200 { technician } | 404   (X-CSRF-Token)
+
+GET    /api/v1/operations/bookings/:id/assignable-technicians -> 200 { items: AssignableTechnician[] } | 404
+POST   /api/v1/operations/bookings/:id/assign-technician      -> 200 { booking } | 404 | 409 | 422   (X-CSRF-Token)
 ```
 
-Responsibilities:
+- **Technician list** — query `active` (bool), `q` (name / email substring),
+  `page` (≤ 10000), `limit` (1–100, default 20). `TechnicianSummary` =
+  `{ id, displayName, serviceArea, active, name, email, qualifiedServiceCount,
+activeAssignmentCount }`. No password hash, no user internals. Detail adds
+  `qualifications: [{ serviceId, slug, name, active }]`.
+- **Active status** — body `{ active: boolean }` `.strict()`. Deactivating a
+  technician does **not** touch existing bookings; it only blocks new
+  assignments.
+- **Qualifications** — `TechnicianService` join. Body `{ serviceId }` `.strict()`.
+  The service must exist and be **active** (`422` otherwise); a duplicate is
+  `409` (DB `@@unique(technicianId, serviceId)`). Removing a qualification never
+  alters historical bookings.
 
-- Show assigned jobs.
-- Show job details.
-- Allow valid technician status transitions such as `assigned -> in_progress -> completed`.
+### Booking assignment
+
+- **Assignable technicians** — active technicians qualified for the booking's
+  service, excluding the currently-assigned one, each with a
+  `hasScheduleConflict` flag (an overlapping `confirmed` / `assigned` /
+  `in_progress` booking). Advisory; the server re-checks on assign.
+- **Assign / reassign** — body `{ technicianId, reason? }` `.strict()`. Allowed
+  when the booking is `confirmed` (first assignment, status → `assigned`) or
+  `assigned` (reassignment, stays `assigned`). One transaction that takes a
+  `SELECT ... FOR UPDATE` lock on the target `Technician`, then verifies: booking
+  in an assignable state (`409` otherwise), target technician exists (`422`),
+  active (`422`), qualified for the booking's service (`422`), not already this
+  booking's technician (`409`), and has no overlapping committed booking
+  (`409`). The booking **keeps its slot** — assignment changes
+  `Booking.technicianId` only. A `BookingStatusHistory` row is written with the
+  operator; the **price snapshot is never touched**. A concurrent status change
+  to the booking is caught by a conditional update (`409`). Two concurrent
+  assign requests always leave the booking assigned to exactly one technician.
+
+### Status lifecycle (updated)
+
+The operations dashboard's `PATCH /operations/bookings/:id/status` remains
+`confirmed | rejected | cancelled` only — `confirmed -> assigned` is done by the
+dedicated assign endpoint above (it needs a technician). The technician job flow
+(`assigned -> in_progress -> completed`) is on the technician routes.
+
+## AI Assistant Endpoints
 
 ## AI Assistant Endpoints
 

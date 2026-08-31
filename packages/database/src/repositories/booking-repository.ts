@@ -1,4 +1,9 @@
-import { calculateServicePrice, isCustomerCancellable, type BookingStatus } from '@aisbp/shared';
+import {
+  calculateServicePrice,
+  canActorTransition,
+  isCustomerCancellable,
+  type BookingStatus,
+} from '@aisbp/shared';
 import { prisma } from '../client.js';
 import { Prisma } from '../../generated/prisma/index.js';
 
@@ -64,13 +69,28 @@ const statusEventSelect = {
   createdAt: true,
 } satisfies Prisma.BookingStatusHistorySelect;
 
+const technicianJobSelect = {
+  ...technicianBookingSelect,
+  statusHistory: {
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: statusEventSelect,
+  },
+} satisfies Prisma.BookingSelect;
+
 export type CustomerBookingRow = Prisma.BookingGetPayload<{ select: typeof customerBookingSelect }>;
 export type TechnicianBookingRow = Prisma.BookingGetPayload<{
   select: typeof technicianBookingSelect;
 }>;
+export type TechnicianJobRow = Prisma.BookingGetPayload<{ select: typeof technicianJobSelect }>;
 export type BookingStatusEventRow = Prisma.BookingStatusHistoryGetPayload<{
   select: typeof statusEventSelect;
 }>;
+
+export type TechnicianJobStatusResult =
+  | { outcome: 'ok'; booking: TechnicianJobRow }
+  | { outcome: 'not_found' }
+  | { outcome: 'invalid_transition'; from: BookingStatus }
+  | { outcome: 'conflict' };
 
 export interface CreateBookingData {
   customerId: string;
@@ -274,6 +294,66 @@ export const bookingRepository = {
       where: { technicianId },
       orderBy: [{ scheduledStart: 'asc' }, { id: 'asc' }],
       select: technicianBookingSelect,
+    });
+  },
+
+  /** One job in full, only if it is assigned to this technician. */
+  findJobForTechnician(id: string, technicianId: string): Promise<TechnicianJobRow | null> {
+    return prisma.booking.findFirst({
+      where: { id, technicianId },
+      select: technicianJobSelect,
+    });
+  },
+
+  /**
+   * A technician advances their own job through the `technician` transitions
+   * (`assigned -> in_progress -> completed`). Ownership is enforced in the
+   * `where` (`{ id, technicianId }`); another technician's booking is
+   * indistinguishable from a missing one. Transactional, state-machine-checked,
+   * conditional update against a concurrent change, history recorded with the
+   * technician's user id. The price snapshot is never touched.
+   */
+  async changeJobStatusForTechnician(
+    id: string,
+    technicianId: string,
+    technicianUserId: string,
+    target: BookingStatus,
+  ): Promise<TechnicianJobStatusResult> {
+    return prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: { id, technicianId },
+        select: { status: true },
+      });
+      if (!booking) {
+        return { outcome: 'not_found' as const };
+      }
+      if (!canActorTransition('technician', booking.status, target)) {
+        return { outcome: 'invalid_transition' as const, from: booking.status };
+      }
+
+      const changed = await tx.booking.updateMany({
+        where: { id, technicianId, status: booking.status },
+        data: { status: target },
+      });
+      if (changed.count !== 1) {
+        return { outcome: 'conflict' as const };
+      }
+
+      await tx.bookingStatusHistory.create({
+        data: {
+          bookingId: id,
+          fromStatus: booking.status,
+          toStatus: target,
+          changedByUserId: technicianUserId,
+          reason: `Set to ${target} by technician`,
+        },
+      });
+
+      const updated = await tx.booking.findUniqueOrThrow({
+        where: { id },
+        select: technicianJobSelect,
+      });
+      return { outcome: 'ok' as const, booking: updated };
     });
   },
 

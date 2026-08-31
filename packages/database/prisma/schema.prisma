@@ -106,9 +106,10 @@ model Service {
   createdAt                DateTime @default(now()) @db.Timestamptz(3)
   updatedAt                DateTime @updatedAt @db.Timestamptz(3)
 
-  category ServiceCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  slots    AvailabilitySlot[]
-  bookings Booking[]
+  category       ServiceCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slots          AvailabilitySlot[]
+  bookings       Booking[]
+  qualifications TechnicianService[]
 
   @@index([categoryId])
   @@index([active])
@@ -123,11 +124,30 @@ model Technician {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
-  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  slots    AvailabilitySlot[]
-  bookings Booking[]
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slots          AvailabilitySlot[]
+  bookings       Booking[]
+  qualifications TechnicianService[]
 
   @@index([active])
+}
+
+/// Which services a technician is qualified/authorised to perform. Operations
+/// manages these rows; assignment (Milestone 11) refuses a technician who is
+/// not qualified for a booking's service. Removing a row never touches
+/// historical bookings — `Booking.serviceId` / `Booking.technicianId` are
+/// independent columns.
+model TechnicianService {
+  id           String   @id @default(cuid())
+  technicianId String
+  serviceId    String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([technicianId, serviceId])
+  @@index([serviceId])
 }
 
 model AvailabilitySlot {
@@ -167,9 +187,9 @@ model Booking {
   // --- Price snapshot: captured at booking time, never recomputed ---
   priceCurrency           String
   priceSubtotalCents      Int
-  priceFeesTotalCents     Int  @default(0)
-  priceDiscountTotalCents Int  @default(0)
-  priceTaxTotalCents      Int  @default(0)
+  priceFeesTotalCents     Int    @default(0)
+  priceDiscountTotalCents Int    @default(0)
+  priceTaxTotalCents      Int    @default(0)
   priceTotalCents         Int
   /// Structured line items for display, e.g.
   /// { "lines": [{ "label": "Washing machine installation", "amountCents": 8900 }] }

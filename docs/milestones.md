@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 11: Technician management and assignment — not started.**
+**Milestone 12: Search, filtering, pagination, and performance — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–10 are complete with CI green on `origin/main`.
+Milestones 1–11 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -136,10 +136,20 @@ UI with route guards. No schema change. See [API Boundaries](api.md),
 Technician assignment, technician profile / active-status management, and the
 technician job-status flow are **Milestone 11**, not this milestone.
 
-### M11: Technician management and assignment
+### M11: Technician management and assignment — complete
 
-Technician profiles and active status, technician assignment to bookings, and
-technician job-status/completion flow.
+Operations technician management (`/api/v1/operations/technicians` — list /
+detail / active-status / service qualifications) backed by a new
+`TechnicianService` join table (the M7 deferral, resolved). Operations booking
+assignment / reassignment (`POST /api/v1/operations/bookings/:id/assign-technician`)
+— transactional, `FOR UPDATE`-locked per technician, validating active +
+qualified + no schedule conflict; the booking keeps its slot and the price
+snapshot is untouched. Technician job flow
+(`PATCH /api/v1/technician/bookings/:id/status`, `assigned -> in_progress ->
+completed`) and a read-only technician profile. Operations technician-management
+UI and a technician jobs UI. One migration
+(`20260901120000_technician_service`). See [API Boundaries](api.md),
+[Database](database.md), and [Security Strategy](security.md).
 
 ### M12: Search, filtering, pagination, and performance
 

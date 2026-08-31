@@ -15,6 +15,10 @@ import { bookingRouter, technicianBookingRouter } from './modules/bookings/booki
 import { catalogueRouter } from './modules/catalogue/catalogue-routes.js';
 import { operationsRouter } from './modules/operations/operations-routes.js';
 import { pricingRouter } from './modules/pricing/pricing-routes.js';
+import {
+  operationsTechnicianRouter,
+  technicianProfileRouter,
+} from './modules/technicians/technician-routes.js';
 
 export function createApp() {
   const app = express();
@@ -48,8 +52,10 @@ export function createApp() {
   app.use('/api/v1/addresses', addressRouter);
   app.use('/api/v1/bookings', bookingRouter);
   app.use('/api/v1/operations', operationsRouter);
+  app.use('/api/v1/operations', operationsTechnicianRouter);
   app.use('/api/v1/technician/availability', technicianAvailabilityRouter);
   app.use('/api/v1/technician/bookings', technicianBookingRouter);
+  app.use('/api/v1/technician/profile', technicianProfileRouter);
   app.use('/api/v1', catalogueRouter);
   app.use('/api/v1', publicAvailabilityRouter);
   app.use('/api/v1', pricingRouter);

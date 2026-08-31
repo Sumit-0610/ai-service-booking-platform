@@ -3,6 +3,7 @@ import {
   type BookingStatusEventRow,
   type CustomerBookingRow,
   type TechnicianBookingRow,
+  type TechnicianJobRow,
 } from '@aisbp/database';
 import {
   bookingPriceSchema,
@@ -11,6 +12,8 @@ import {
   type BookingStatusEvent,
   type CreateBookingInput,
   type TechnicianBooking,
+  type TechnicianJob,
+  type TechnicianJobStatusTarget,
 } from '@aisbp/shared';
 import { AppError } from '../../lib/errors.js';
 
@@ -158,11 +161,42 @@ export const bookingService = {
     return rows.map(toTechnicianBooking);
   },
 
-  async getForTechnician(technicianId: string, id: string): Promise<TechnicianBooking> {
-    const row = await repositories.bookings.findForTechnician(id, technicianId);
+  async getForTechnician(technicianId: string, id: string): Promise<TechnicianJob> {
+    const row = await repositories.bookings.findJobForTechnician(id, technicianId);
     if (!row) {
       throw new AppError('NOT_FOUND', 'Booking not found');
     }
-    return toTechnicianBooking(row);
+    return toTechnicianJob(row);
+  },
+
+  async changeJobStatusForTechnician(
+    technicianId: string,
+    technicianUserId: string,
+    id: string,
+    target: TechnicianJobStatusTarget,
+  ): Promise<TechnicianJob> {
+    const result = await repositories.bookings.changeJobStatusForTechnician(
+      id,
+      technicianId,
+      technicianUserId,
+      target,
+    );
+    switch (result.outcome) {
+      case 'ok':
+        return toTechnicianJob(result.booking);
+      case 'not_found':
+        throw new AppError('NOT_FOUND', 'Booking not found');
+      case 'invalid_transition':
+        throw new AppError('CONFLICT', `A ${result.from} job cannot be set to ${target}`);
+      case 'conflict':
+        throw new AppError('CONFLICT', 'The job status changed while you were updating it');
+    }
   },
 };
+
+function toTechnicianJob(row: TechnicianJobRow): TechnicianJob {
+  return {
+    ...toTechnicianBooking(row),
+    statusHistory: row.statusHistory.map(toStatusEvent),
+  };
+}

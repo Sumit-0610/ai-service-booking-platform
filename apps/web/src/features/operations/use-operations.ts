@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { OperationsBooking, OperationsBookingList, OperationsDashboard } from '@aisbp/shared';
+import type {
+  OperationsBooking,
+  OperationsBookingList,
+  OperationsDashboard,
+  OperationsTechnician,
+  OperationsTechnicianList,
+} from '@aisbp/shared';
 import { ApiError } from '../../lib/api';
 import { operationsApi, type OpsBookingQuery } from './operations-api';
 
@@ -122,5 +128,83 @@ export function useOpsBooking(id: string): {
     error,
     refetch: useCallback(() => setNonce((n) => n + 1), []),
     setBooking,
+  };
+}
+
+export function useOpsTechnicians(query: { active?: boolean | undefined; page: number }): {
+  status: AsyncStatus;
+  data: OperationsTechnicianList | null;
+  error: ApiError | Error | null;
+  refetch: () => void;
+} {
+  const [status, setStatus] = useState<AsyncStatus>('loading');
+  const [data, setData] = useState<OperationsTechnicianList | null>(null);
+  const [error, setError] = useState<ApiError | Error | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const key = `${query.active ?? ''}|${query.page}|${nonce}`;
+
+  useEffect(() => {
+    let active = true;
+    setStatus('loading');
+    operationsApi
+      .listTechnicians({ active: query.active, page: query.page })
+      .then((response) => {
+        if (!active) return;
+        setData(response);
+        setError(null);
+        setStatus('success');
+      })
+      .catch((caught: unknown) => {
+        if (!active) return;
+        setError(normaliseError(caught));
+        setStatus('error');
+      });
+    return () => {
+      active = false;
+    };
+  }, [key]);
+
+  return { status, data, error, refetch: useCallback(() => setNonce((n) => n + 1), []) };
+}
+
+export function useOpsTechnician(id: string): {
+  status: AsyncStatus;
+  technician: OperationsTechnician | null;
+  error: ApiError | Error | null;
+  refetch: () => void;
+  setTechnician: (t: OperationsTechnician) => void;
+} {
+  const [status, setStatus] = useState<AsyncStatus>('loading');
+  const [technician, setTechnician] = useState<OperationsTechnician | null>(null);
+  const [error, setError] = useState<ApiError | Error | null>(null);
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setStatus('loading');
+    operationsApi
+      .getTechnician(id)
+      .then((response) => {
+        if (!active) return;
+        setTechnician(response.technician);
+        setError(null);
+        setStatus('success');
+      })
+      .catch((caught: unknown) => {
+        if (!active) return;
+        setError(normaliseError(caught));
+        setStatus('error');
+      });
+    return () => {
+      active = false;
+    };
+  }, [id, nonce]);
+
+  return {
+    status,
+    technician,
+    error,
+    refetch: useCallback(() => setNonce((n) => n + 1), []),
+    setTechnician,
   };
 }

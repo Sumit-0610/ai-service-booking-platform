@@ -7,6 +7,7 @@ export * from './booking.js';
 export * from './catalogue.js';
 export * from './operations.js';
 export * from './pricing.js';
+export * from './technician.js';
 
 export const healthResponseSchema = z.object({
   status: z.literal('ok'),

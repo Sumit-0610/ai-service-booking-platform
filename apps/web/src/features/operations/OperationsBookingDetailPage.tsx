@@ -1,9 +1,11 @@
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   canActorTransition,
   formatPrice,
   operationsStatusTargets,
+  type AssignableTechnician,
+  type OperationsBooking,
   type OperationsStatusTarget,
 } from '@aisbp/shared';
 import { ApiError } from '../../lib/api';
@@ -149,6 +151,10 @@ export function OperationsBookingDetailPage(): ReactElement {
         </section>
       ) : null}
 
+      {booking.status === 'confirmed' || booking.status === 'assigned' ? (
+        <AssignmentSection bookingId={id} booking={booking} onAssigned={setBooking} />
+      ) : null}
+
       <section className="mt-8" aria-label="Status timeline">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Timeline</h2>
         <ol className="mt-3 space-y-1.5 text-sm">
@@ -166,6 +172,126 @@ export function OperationsBookingDetailPage(): ReactElement {
         </ol>
       </section>
     </main>
+  );
+}
+
+function AssignmentSection({
+  bookingId,
+  booking,
+  onAssigned,
+}: {
+  bookingId: string;
+  booking: OperationsBooking;
+  onAssigned: (b: OperationsBooking) => void;
+}): ReactElement {
+  const [options, setOptions] = useState<AssignableTechnician[] | null>(null);
+  const [selected, setSelected] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    operationsApi
+      .assignableTechnicians(bookingId)
+      .then((r) => {
+        if (active) setOptions(Array.isArray(r.items) ? r.items : []);
+      })
+      .catch(() => {
+        if (active) setOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [bookingId, booking.status, booking.technicianName]);
+
+  const assign = async (): Promise<void> => {
+    if (!selected) return;
+    const target = options?.find((o) => o.id === selected);
+    if (
+      target?.hasScheduleConflict &&
+      !window.confirm(`${target.displayName} has another job at this time. Assign anyway?`)
+    ) {
+      return;
+    }
+    setBusy(true);
+    setErrorText(null);
+    setNotice(null);
+    try {
+      const { booking: next } = await operationsApi.assignTechnician(bookingId, {
+        technicianId: selected,
+      });
+      onAssigned(next);
+      setSelected('');
+      setNotice('Technician assigned.');
+    } catch (caught) {
+      setErrorText(
+        caught instanceof ApiError ? caught.message : 'Could not assign. Please try again.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section
+      className="mt-6 rounded-2xl border border-slate-200 bg-white p-5"
+      aria-label="Technician assignment"
+    >
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        {booking.status === 'assigned' ? 'Reassign technician' : 'Assign technician'}
+      </h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Current: {booking.technicianName ?? 'Unassigned'}
+      </p>
+
+      {options === null ? (
+        <p className="mt-3 text-sm text-slate-500">Loading eligible technicians…</p>
+      ) : options.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-600">
+          No other active technician is qualified for this service.
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label className="text-sm">
+            <span className="sr-only">Technician</span>
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              aria-label="Technician"
+            >
+              <option value="">Choose a technician…</option>
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.displayName}
+                  {o.hasScheduleConflict ? ' — busy at this time' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={assign}
+            disabled={busy || selected === ''}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {busy ? 'Assigning…' : booking.status === 'assigned' ? 'Reassign' : 'Assign'}
+          </button>
+        </div>
+      )}
+
+      {notice ? (
+        <p role="status" className="mt-2 text-sm font-medium text-emerald-700">
+          {notice}
+        </p>
+      ) : null}
+      {errorText ? (
+        <p role="alert" className="mt-2 text-sm font-medium text-rose-700">
+          {errorText}
+        </p>
+      ) : null}
+    </section>
   );
 }
 

@@ -57,6 +57,7 @@ Application code imports from `@aisbp/database`, never from the generated client
 | `ServiceCategory`      | Groups bookable services.                                                   |
 | `Service`              | A bookable offering with a current `basePriceCents`.                        |
 | `Technician`           | Operational worker profile, 1:1 with a `User`.                              |
+| `TechnicianService`    | Technician ↔ service qualification join (Milestone 11).                     |
 | `AvailabilitySlot`     | A time window a technician can perform a service.                           |
 | `Booking`              | Central booking/job record. Holds its own price snapshot.                   |
 | `BookingStatusHistory` | Append-only audit of every booking status change.                           |
@@ -71,6 +72,7 @@ User 1  -> * BookingStatusHistory (as the actor who changed status)
 ServiceCategory 1 -> * Service
 Service 1 -> * AvailabilitySlot
 Service 1 -> * Booking
+Technician * <-> * Service      (via TechnicianService)
 Technician 1 -> * AvailabilitySlot
 Technician 1 -> * Booking
 AvailabilitySlot 1 -> 0..1 Booking
@@ -85,6 +87,9 @@ Address 1 -> * Booking
   (you cannot delete something a booking still points at) and `SetNull` for
   `technician` (a booking survives a technician being removed).
 - `BookingStatusHistory` is `Cascade`-deleted with its `Booking`.
+- `TechnicianService` is `Cascade`-deleted with either its `Technician` or its
+  `Service`; because a booking stores its own `serviceId` / `technicianId`,
+  dropping a qualification never affects a booking.
 
 ## Constraints and indexes
 
@@ -92,9 +97,12 @@ Prisma-level:
 
 - Unique: `User.email`, `ServiceCategory.slug`, `Service.slug`,
   `Technician.userId`, `Booking.slotId`,
-  `AvailabilitySlot(technicianId, serviceId, startsAt)` (exact-duplicate guard).
+  `AvailabilitySlot(technicianId, serviceId, startsAt)` (exact-duplicate guard),
+  `TechnicianService(technicianId, serviceId)` (Milestone 11 — one qualification
+  row per technician/service).
 - Indexes: `User(role)`, `Address(userId)`, `ServiceCategory(active)`,
   `Service(categoryId)`, `Service(active)`, `Technician(active)`,
+  `TechnicianService(serviceId)`,
   `AvailabilitySlot(technicianId, startsAt)`,
   `AvailabilitySlot(serviceId, startsAt)`,
   `AvailabilitySlot(status, startsAt)`,
@@ -230,6 +238,38 @@ scheduledStart)`. Status history is `where { bookingId } order by createdAt` →
 - `BookingStatusHistory.changedByUserId` records the acting operator for every
   operations status change; the relation to `User` is `onDelete: SetNull`.
 
+### Technician management & assignment (Milestone 11)
+
+- **Schema change: one new table.** `TechnicianService` (`id`, `technicianId`,
+  `serviceId`, `createdAt`) — the technician ↔ service qualification join that
+  Milestone 7 deferred. It is required because assignment (M11) must reject a
+  technician who is not qualified for a booking's service, and that relationship
+  cannot be derived safely from availability slots.
+- **Migration**: `packages/database/prisma/migrations/20260901120000_technician_service`
+  — `CREATE TABLE` + two `Restrict`-free `ON DELETE CASCADE` foreign keys +
+  `UNIQUE (technicianId, serviceId)` + `INDEX (serviceId)`. Verified from an
+  empty database (`prisma migrate deploy` runs both migrations in order in CI).
+  No existing table, constraint, referential action, or index was changed or
+  weakened.
+- **Index justification**: the unique index backs the duplicate-qualification
+  guard and the `technicianId_serviceId` point lookup in assignment; the
+  `serviceId` index backs "which active technicians are qualified for service X"
+  in the assignable-technicians query. No speculative indexes.
+- **Seed**: six deterministic `TechnicianService` rows (Tomas: washing machine /
+  dishwasher / refrigerator; Tara: Wi-Fi mesh / smart doorbell / thermostat),
+  upserted by the unique key. No seeded bookings (kept, so the slot rebuild stays
+  idempotent).
+- **Assignment concurrency**: `assignTechnician` and the technician-mutating
+  methods (`setActive`, `addQualification`, `removeQualification`) take a
+  `SELECT ... FOR UPDATE` row lock on the target `Technician` inside their
+  transaction, so assignments / deactivations / qualification changes for one
+  technician serialise. Booking-row conditional `updateMany` guards the booking
+  itself. `Booking.slotId` UNIQUE and the availability exclusion constraint are
+  untouched.
+- **Technician job status**: `changeJobStatusForTechnician` is owner-scoped
+  (`where: { id, technicianId }`), transactional, conditional, and records
+  `BookingStatusHistory` with the technician's user id.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created
@@ -281,8 +321,9 @@ Deterministic and safe to re-run. It creates: five users (two customers, one
 operations, two technicians), three customer addresses (Indian demo data),
 three service categories,
 fourteen services (thirteen active plus one inactive, to exercise catalogue
-filtering), two technicians, and one week of upcoming, non-overlapping
-availability slots. Every seeded account has the development password
+filtering), two technicians with three service qualifications each, and one week
+of upcoming, non-overlapping availability slots. Every seeded account has the
+development password
 `aisbp-dev-password`. There is no seeded booking data and no fabricated metrics,
 ratings, or reviews.
 

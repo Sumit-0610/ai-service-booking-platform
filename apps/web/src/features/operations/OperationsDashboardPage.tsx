@@ -33,7 +33,15 @@ export function OperationsDashboardPage(): ReactElement {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-bold text-slate-900">Operations dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">Operations dashboard</h1>
+        <Link
+          to="/operations/technicians"
+          className="text-sm font-medium text-sky-700 hover:underline"
+        >
+          Technicians →
+        </Link>
+      </div>
 
       {/* Metrics */}
       {dashboard.status === 'loading' ? (

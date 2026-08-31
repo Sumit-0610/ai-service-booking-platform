@@ -107,6 +107,24 @@ describe('App routing and auth', () => {
     });
   });
 
+  it('redirects an unauthenticated visit to /operations/technicians to the login page', async () => {
+    mockApi();
+    window.history.pushState({}, '', '/operations/technicians');
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /log in/i })).toBeInTheDocument();
+    });
+  });
+
+  it('redirects an unauthenticated visit to /technician/bookings to the login page', async () => {
+    mockApi();
+    window.history.pushState({}, '', '/technician/bookings');
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /log in/i })).toBeInTheDocument();
+    });
+  });
+
   it('logs in and reflects the session in the header', async () => {
     const fetchMock = mockApi({
       'POST /api/v1/auth/login': () => Promise.resolve(json({ user: CUSTOMER }, 200)),

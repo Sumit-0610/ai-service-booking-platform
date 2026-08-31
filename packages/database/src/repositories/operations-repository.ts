@@ -100,6 +100,28 @@ export type OperationsStatusChangeResult =
   | { outcome: 'invalid_transition'; from: BookingStatus }
   | { outcome: 'conflict' };
 
+export type AssignTechnicianResult =
+  | { outcome: 'ok'; booking: OperationsBookingDetailRow }
+  | { outcome: 'booking_not_found' }
+  | { outcome: 'technician_not_found' }
+  | { outcome: 'technician_inactive' }
+  | { outcome: 'not_qualified' }
+  | { outcome: 'invalid_state'; status: BookingStatus }
+  | { outcome: 'already_assigned' }
+  | { outcome: 'schedule_conflict' }
+  | { outcome: 'conflict' };
+
+export interface AssignableTechnicianRow {
+  id: string;
+  displayName: string;
+  serviceArea: string;
+  hasScheduleConflict: boolean;
+}
+
+/** Booking statuses that count as a technician's live commitment for
+ * overlap checks. */
+const COMMITTED: BookingStatus[] = ['confirmed', 'assigned', 'in_progress'];
+
 const ACTIVE: BookingStatus[] = ['pending', 'confirmed', 'assigned', 'in_progress'];
 const NON_REVENUE: BookingStatus[] = ['cancelled', 'rejected'];
 const ALL_STATUSES: BookingStatus[] = [
@@ -257,5 +279,162 @@ export const operationsRepository = {
       });
       return { outcome: 'ok' as const, booking: updated };
     });
+  },
+
+  /**
+   * Assign (or reassign) a technician to a booking. Runs in one transaction
+   * that first takes a `FOR UPDATE` row lock on the target `Technician`, so
+   * concurrent assignments / deactivations / qualification changes for that
+   * technician serialise. Validates: booking exists and is `confirmed` or
+   * `assigned`; target technician exists and is active; target technician is
+   * qualified for the booking's service; target technician has no overlapping
+   * committed booking. The booking keeps its slot — assignment changes
+   * `Booking.technicianId` and moves the status to `assigned`. The conditional
+   * `updateMany` guards against a concurrent status change to this booking.
+   */
+  async assignTechnician(
+    bookingId: string,
+    operatorUserId: string,
+    targetTechnicianId: string,
+    reason: string | null,
+  ): Promise<AssignTechnicianResult> {
+    return prisma.$transaction(async (tx) => {
+      const techRows = await tx.$queryRaw<
+        { active: boolean }[]
+      >`SELECT active FROM "Technician" WHERE id = ${targetTechnicianId} FOR UPDATE`;
+      if (techRows.length === 0) {
+        return { outcome: 'technician_not_found' as const };
+      }
+      if (!techRows[0]?.active) {
+        return { outcome: 'technician_inactive' as const };
+      }
+
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        select: {
+          status: true,
+          serviceId: true,
+          technicianId: true,
+          scheduledStart: true,
+          scheduledEnd: true,
+        },
+      });
+      if (!booking) {
+        return { outcome: 'booking_not_found' as const };
+      }
+      if (booking.status !== 'confirmed' && booking.status !== 'assigned') {
+        return { outcome: 'invalid_state' as const, status: booking.status };
+      }
+      if (booking.technicianId === targetTechnicianId) {
+        return { outcome: 'already_assigned' as const };
+      }
+
+      const qualified = await tx.technicianService.findUnique({
+        where: {
+          technicianId_serviceId: {
+            technicianId: targetTechnicianId,
+            serviceId: booking.serviceId,
+          },
+        },
+        select: { id: true },
+      });
+      if (!qualified) {
+        return { outcome: 'not_qualified' as const };
+      }
+
+      const clash = await tx.booking.findFirst({
+        where: {
+          technicianId: targetTechnicianId,
+          id: { not: bookingId },
+          status: { in: COMMITTED },
+          scheduledStart: { lt: booking.scheduledEnd },
+          scheduledEnd: { gt: booking.scheduledStart },
+        },
+        select: { id: true },
+      });
+      if (clash) {
+        return { outcome: 'schedule_conflict' as const };
+      }
+
+      const changed = await tx.booking.updateMany({
+        where: { id: bookingId, status: booking.status, technicianId: booking.technicianId },
+        data: { technicianId: targetTechnicianId, status: 'assigned' },
+      });
+      if (changed.count !== 1) {
+        return { outcome: 'conflict' as const };
+      }
+
+      await tx.bookingStatusHistory.create({
+        data: {
+          bookingId,
+          fromStatus: booking.status,
+          toStatus: 'assigned',
+          changedByUserId: operatorUserId,
+          reason:
+            reason ??
+            (booking.status === 'confirmed'
+              ? 'Assigned to a technician by operations'
+              : 'Reassigned to another technician by operations'),
+        },
+      });
+
+      const updated = await tx.booking.findUniqueOrThrow({
+        where: { id: bookingId },
+        select: opsDetailSelect,
+      });
+      return { outcome: 'ok' as const, booking: updated };
+    });
+  },
+
+  /** Active technicians qualified for a booking's service, with an overlap flag.
+   * Excludes the currently-assigned technician. Two queries, no N+1. */
+  async assignableForBooking(
+    bookingId: string,
+  ): Promise<{ outcome: 'ok'; items: AssignableTechnicianRow[] } | { outcome: 'not_found' }> {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { serviceId: true, technicianId: true, scheduledStart: true, scheduledEnd: true },
+    });
+    if (!booking) {
+      return { outcome: 'not_found' };
+    }
+
+    const where: Prisma.TechnicianWhereInput = {
+      active: true,
+      qualifications: { some: { serviceId: booking.serviceId } },
+    };
+    if (booking.technicianId) {
+      where.id = { not: booking.technicianId };
+    }
+    const technicians = await prisma.technician.findMany({
+      where,
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      select: { id: true, displayName: true, serviceArea: true },
+    });
+
+    const ids = technicians.map((t) => t.id);
+    const clashes = ids.length
+      ? await prisma.booking.findMany({
+          where: {
+            technicianId: { in: ids },
+            id: { not: bookingId },
+            status: { in: COMMITTED },
+            scheduledStart: { lt: booking.scheduledEnd },
+            scheduledEnd: { gt: booking.scheduledStart },
+          },
+          select: { technicianId: true },
+        })
+      : [];
+    const clashing = new Set(clashes.map((c) => c.technicianId));
+
+    return {
+      outcome: 'ok',
+      items: technicians.map((t) => ({
+        id: t.id,
+        displayName: t.displayName,
+        serviceArea: t.serviceArea,
+        hasScheduleConflict: clashing.has(t.id),
+      })),
+    };
   },
 };

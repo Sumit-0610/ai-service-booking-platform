@@ -175,6 +175,46 @@
 - **Unbounded queries**: the dashboard uses `count` / `groupBy` aggregation
   only; the bookings table is never loaded into application memory.
 
+## Technician Management & Assignment Security (implemented — Milestone 11)
+
+- **Operations-only management**: every `/api/v1/operations/technicians*` route
+  and the two `/api/v1/operations/bookings/:id/assign*` routes require
+  `requireRole('operations')` — `401` unauth, `403` customer / technician.
+  Mutations require CSRF.
+- **Technician self-scope**: `/api/v1/technician/profile` and the technician job
+  routes require `requireRole('technician')` + a resolved profile. Ownership is
+  `user -> Technician.userId -> Technician.id -> Booking.technicianId`, enforced
+  in every repository `where`. Reading, opening, or transitioning another
+  technician's job returns the same `404` as a missing one — no enumeration. A
+  technician cannot touch another technician's profile or qualifications (those
+  routes are operations-only) and cannot manage their own record at all.
+- **Never trust a client technician relationship**: the assign body is
+  `.strict()` with only `{ technicianId, reason? }`; `status`, `slotId`,
+  `changedByUserId`, `customerId`, `serviceId` are `422`. The technician is
+  resolved and re-validated server-side (exists, active, qualified for the
+  booking's service, no overlapping commitment) inside the transaction. The job
+  status body is `.strict()` `{ status, reason? }` with `status ∈
+{in_progress, completed}`.
+- **Qualification integrity**: `serviceId` is validated server-side; the service
+  must exist and be **active**. The DB `@@unique(technicianId, serviceId)` — not
+  an application check — prevents duplicates (`409`). Removing a qualification
+  cannot corrupt or hide historical bookings.
+- **State machine**: assignment is only allowed from `confirmed` / `assigned`;
+  job transitions are checked against the `technician` actor row. A forbidden
+  transition is `409`, never a silent write. `BookingStatusHistory` is only ever
+  written by the service, with the authenticated actor's id.
+- **Concurrency**: `SELECT ... FOR UPDATE` on the target `Technician` serialises
+  assignment with deactivation and qualification changes; conditional booking
+  updates catch a concurrent booking-status change. Two concurrent assign
+  attempts always leave one consistent assignment, never a corrupt booking. The
+  price snapshot is never rewritten.
+- **Data exposure**: technician DTOs carry `displayName` / `serviceArea` /
+  `active` / linked user `name` + `email` (operations needs the identity) and
+  qualification names — never a password hash, session, timestamps beyond
+  `createdAt`, or raw foreign keys. The technician's own `profile` omits even the
+  email. `:id` params are validated against `[A-Za-z0-9-]{8,64}` before any
+  query.
+
 ## API Validation
 
 Use Zod schemas for:

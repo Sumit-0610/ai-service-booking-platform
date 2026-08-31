@@ -34,10 +34,12 @@ export type { AddressRow, AddressWriteInput, AddressUpdateInput } from './addres
 export type {
   CustomerBookingRow,
   TechnicianBookingRow,
+  TechnicianJobRow,
   BookingStatusEventRow,
   CreateBookingData,
   CreateBookingResult,
   CancelBookingResult,
+  TechnicianJobStatusResult,
 } from './booking-repository.js';
 export type {
   OperationsBookingSummaryRow,
@@ -45,7 +47,15 @@ export type {
   OperationsBookingSearchParams,
   OperationsDashboardCounts,
   OperationsStatusChangeResult,
+  AssignTechnicianResult,
+  AssignableTechnicianRow,
 } from './operations-repository.js';
+export type {
+  OperationsTechnicianSummaryRow,
+  OperationsTechnicianDetailRow,
+  TechnicianSearchParams,
+  AddQualificationResult,
+} from './technician-repository.js';
 export type {
   PublicSlotRow,
   TechnicianSlotRow,

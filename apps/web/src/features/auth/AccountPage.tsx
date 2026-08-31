@@ -55,23 +55,41 @@ export function AccountPage(): ReactElement {
       ) : null}
 
       {user?.role === 'operations' ? (
-        <Link
-          to="/operations"
-          className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
-        >
-          Operations dashboard
-          <span aria-hidden="true">→</span>
-        </Link>
+        <>
+          <Link
+            to="/operations"
+            className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
+          >
+            Operations dashboard
+            <span aria-hidden="true">→</span>
+          </Link>
+          <Link
+            to="/operations/technicians"
+            className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
+          >
+            Technicians
+            <span aria-hidden="true">→</span>
+          </Link>
+        </>
       ) : null}
 
       {user?.role === 'technician' ? (
-        <Link
-          to="/technician/availability"
-          className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
-        >
-          Your availability
-          <span aria-hidden="true">→</span>
-        </Link>
+        <>
+          <Link
+            to="/technician/bookings"
+            className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
+          >
+            Your jobs
+            <span aria-hidden="true">→</span>
+          </Link>
+          <Link
+            to="/technician/availability"
+            className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300"
+          >
+            Your availability
+            <span aria-hidden="true">→</span>
+          </Link>
+        </>
       ) : null}
 
       <button

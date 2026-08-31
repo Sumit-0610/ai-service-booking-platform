@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 10 (operations dashboard) is in progress: an operations-only dashboard (`GET /api/v1/operations/dashboard`) with booking counts by status, active/upcoming counts, and committed revenue — all computed as database aggregations — plus a filterable, paginated booking queue, a full booking detail view with the status timeline, and operator status triage (`PATCH /api/v1/operations/bookings/:id/status` for `pending→confirmed`, `pending→rejected`, `confirmed→cancelled`), state-machine-enforced and CSRF-protected. Milestones 1–9 are complete with CI green. Technician assignment and management, the technician job-status flow, payments, and AI features are not implemented yet.
+Milestone 11 (technician management and assignment) is complete: operations manage technician records and per-service qualifications (new `TechnicianService` join table), assign or reassign a technician to a `confirmed`/`assigned` booking (transactional, validated against active status, qualification, and schedule conflicts; the booking keeps its slot and price snapshot), and technicians progress their own jobs `assigned → in_progress → completed`. Milestones 1–11 are complete with CI green. Search/filtering/performance work, Redis caching, payments, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

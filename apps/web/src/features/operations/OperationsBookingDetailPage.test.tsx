@@ -60,6 +60,8 @@ function booking(overrides: Partial<OperationsBooking> = {}): OperationsBooking 
 interface Handlers {
   get?: () => Response;
   patch?: (body: unknown) => Response;
+  assignable?: () => Response;
+  assign?: (body: unknown) => Response;
 }
 
 function mockApi(h: Handlers = {}) {
@@ -67,6 +69,14 @@ function mockApi(h: Handlers = {}) {
     const url = String(input);
     const method = init?.method ?? 'GET';
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    if (url.includes('/assignable-technicians')) {
+      return Promise.resolve(h.assignable?.() ?? json({ items: [] }));
+    }
+    if (url.includes('/assign-technician') && method === 'POST') {
+      return Promise.resolve(
+        h.assign?.(body) ?? json({ booking: booking({ status: 'assigned' }) }),
+      );
+    }
     if (
       url.includes('/api/v1/operations/bookings/') &&
       url.includes('/status') &&
@@ -147,5 +157,59 @@ describe('OperationsBookingDetailPage', () => {
     mockApi({ get: () => json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404) });
     renderPage();
     expect(await screen.findByText(/booking not found/i)).toBeInTheDocument();
+  });
+
+  it('assigns a technician to a confirmed booking', async () => {
+    const fetchMock = mockApi({
+      get: () => json({ booking: booking({ status: 'confirmed', technicianName: null }) }),
+      assignable: () =>
+        json({
+          items: [
+            {
+              id: 'tech-x',
+              displayName: 'Tara Bolt',
+              serviceArea: 'South',
+              hasScheduleConflict: false,
+            },
+          ],
+        }),
+    });
+    renderPage();
+    await screen.findByRole('heading', { name: /wi-fi mesh setup/i });
+
+    await userEvent.selectOptions(await screen.findByLabelText(/^technician$/i), 'tech-x');
+    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([u, i]) => String(u).includes('/assign-technician') && i?.method === 'POST',
+      );
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ technicianId: 'tech-x' });
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(/assigned/i);
+  });
+
+  it('surfaces an assignment conflict', async () => {
+    mockApi({
+      get: () => json({ booking: booking({ status: 'confirmed', technicianName: null }) }),
+      assignable: () =>
+        json({
+          items: [
+            {
+              id: 'tech-x',
+              displayName: 'Tara Bolt',
+              serviceArea: 'South',
+              hasScheduleConflict: false,
+            },
+          ],
+        }),
+      assign: () => json({ error: { code: 'CONFLICT', message: 'another job at this time' } }, 409),
+    });
+    renderPage();
+    await screen.findByRole('heading', { name: /wi-fi mesh setup/i });
+
+    await userEvent.selectOptions(await screen.findByLabelText(/^technician$/i), 'tech-x');
+    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/another job at this time/i);
   });
 });

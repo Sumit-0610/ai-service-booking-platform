@@ -275,6 +275,20 @@ const technicians = [
 ] as const;
 
 /**
+ * Which services each technician is qualified to perform (Milestone 11). Also
+ * the services they offer availability slots for — the slot plan is derived
+ * from this list.
+ */
+const qualifications = [
+  { technicianId: 'seed-technician-tomas', serviceId: 'seed-service-washing-machine' },
+  { technicianId: 'seed-technician-tomas', serviceId: 'seed-service-dishwasher' },
+  { technicianId: 'seed-technician-tomas', serviceId: 'seed-service-refrigerator' },
+  { technicianId: 'seed-technician-tara', serviceId: 'seed-service-wifi-mesh' },
+  { technicianId: 'seed-technician-tara', serviceId: 'seed-service-smart-doorbell' },
+  { technicianId: 'seed-technician-tara', serviceId: 'seed-service-thermostat' },
+] as const;
+
+/**
  * Which service each technician offers slots for. Each technician gets one
  * window per plan entry per day, and the windows are disjoint, so a technician
  * never has two overlapping slots (the database enforces this as well).
@@ -388,6 +402,19 @@ async function main(): Promise<void> {
       });
     }
 
+    for (const qualification of qualifications) {
+      await tx.technicianService.upsert({
+        where: {
+          technicianId_serviceId: {
+            technicianId: qualification.technicianId,
+            serviceId: qualification.serviceId,
+          },
+        },
+        create: qualification,
+        update: {},
+      });
+    }
+
     // Availability is rebuilt from scratch each run so slots always sit in the
     // near future. Seeded slots have no bookings, so this is safe.
     await tx.availabilitySlot.deleteMany({
@@ -396,16 +423,19 @@ async function main(): Promise<void> {
     await tx.availabilitySlot.createMany({ data: buildSlots() });
   });
 
-  const [userCount, serviceCount, activeServiceCount, slotCount] = await Promise.all([
-    prisma.user.count(),
-    prisma.service.count(),
-    prisma.service.count({ where: { active: true } }),
-    prisma.availabilitySlot.count(),
-  ]);
+  const [userCount, serviceCount, activeServiceCount, slotCount, qualificationCount] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.service.count(),
+      prisma.service.count({ where: { active: true } }),
+      prisma.availabilitySlot.count(),
+      prisma.technicianService.count(),
+    ]);
 
   console.log(
     `Seed complete: ${userCount} users, ${serviceCount} services ` +
-      `(${activeServiceCount} active), ${slotCount} availability slots.`,
+      `(${activeServiceCount} active), ${slotCount} availability slots, ` +
+      `${qualificationCount} technician qualifications.`,
   );
 }
 

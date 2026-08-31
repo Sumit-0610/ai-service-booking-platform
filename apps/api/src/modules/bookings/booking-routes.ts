@@ -20,12 +20,20 @@ bookingRouter.get('/:id/status-history', bookingController.statusHistory);
 bookingRouter.post('/:id/cancel', requireCsrf, bookingController.cancel);
 
 /**
- * Read-only view of the jobs booked into this technician's own slots. A booking
- * is linked to a technician because the customer booked that technician's
- * availability slot; there is no separate assignment step in this milestone.
- * Mounted at /api/v1/technician/bookings.
+ * A technician's own jobs. A booking is linked to a technician either because
+ * the customer booked that technician's availability slot (Milestone 9) or
+ * because operations assigned them (Milestone 11). The technician may advance
+ * their own job through the `technician` transitions
+ * (`assigned -> in_progress -> completed`); the mutation requires a CSRF token.
+ * Ownership is enforced per row in the repository (`{ id, technicianId }`), so
+ * another technician's job is a `404`. Mounted at /api/v1/technician/bookings.
  */
 export const technicianBookingRouter = Router();
 technicianBookingRouter.use(requireAuth, requireRole('technician'), loadTechnician);
 technicianBookingRouter.get('/', bookingController.listMineAsTechnician);
 technicianBookingRouter.get('/:id', bookingController.getMineAsTechnician);
+technicianBookingRouter.patch(
+  '/:id/status',
+  requireCsrf,
+  bookingController.updateJobStatusAsTechnician,
+);

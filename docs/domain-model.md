@@ -128,6 +128,33 @@ Indexes:
 - unique `userId`
 - `active`
 
+### TechnicianService (Milestone 11)
+
+The technician ↔ service qualification join. Deferred at Milestone 7, added here
+because assignment must reject a technician who is not qualified for a booking's
+service.
+
+Important fields:
+
+- `id`
+- `technicianId`
+- `serviceId`
+- `createdAt`
+
+Constraints / indexes:
+
+- `@@unique(technicianId, serviceId)` — the database prevents a duplicate
+  qualification.
+- `@@index(serviceId)` — "who can do service X?" for the assignment picker.
+- Both foreign keys are `onDelete: Cascade` (a removed technician or service
+  drops its qualification rows). Removing a `TechnicianService` row **never**
+  affects existing bookings — `Booking.serviceId` and `Booking.technicianId` are
+  independent columns.
+
+Operations manages these rows; there is no self-service. A technician is not
+required to have a matching qualification to _create an availability slot_ (that
+check stays as it was in M7) — the qualification gate applies to _assignment_.
+
 ### AvailabilitySlot
 
 A time window where a technician can perform a service.
@@ -157,10 +184,10 @@ Constraints:
 
 Notes (Milestone 7):
 
-- There is **no technician ↔ service qualification model** in the schema. A
-  technician's link to a service is only "this technician has an availability
-  slot for it". Availability may currently be created for any active service;
-  a `TechnicianService` join is the natural place to gate this later.
+- A technician may still create an availability slot for **any active service**
+  (unchanged). The `TechnicianService` qualification model added in Milestone 11
+  gates **assignment**, not slot creation; tightening slot creation to require a
+  qualification is a small, separate follow-up.
 - `status` is system-managed. The technician API creates slots as `available`
   and does not accept a client-supplied `status`.
 - Timestamps are UTC instants (`timestamptz`); the API is ISO 8601 with an
@@ -234,6 +261,7 @@ User(customer) 1 -> many Booking
 ServiceCategory 1 -> many Service
 Service 1 -> many AvailabilitySlot
 Service 1 -> many Booking
+Technician * <-> * Service   (via TechnicianService — qualifications)
 Technician 1 -> many AvailabilitySlot
 Technician 1 -> many Booking
 AvailabilitySlot 1 -> optional Booking
@@ -297,6 +325,24 @@ Notes (Milestone 10):
   require technician assignment and remain Milestone 11.
 - The operations booking DTOs are read-derived; no operations action recomputes
   or overwrites the immutable price snapshot.
+
+Notes (Milestone 11):
+
+- **Assignment** (`confirmed -> assigned`) is a dedicated operations operation,
+  not part of the generic status endpoint, because it needs a valid technician.
+  It changes `Booking.technicianId` and keeps the existing slot. **Reassignment**
+  moves a booking already in `assigned` to another technician (status unchanged);
+  it is not allowed once work has started (`in_progress` / `completed`).
+- **Technician job flow** — the assigned technician drives
+  `assigned -> in_progress -> completed`, recorded with their user id. A
+  technician can only act on a booking whose `technicianId` matches their own
+  `Technician.id`.
+- Assignment / reassignment / job-status changes are transactional and never
+  recompute the price snapshot. Concurrency is handled by a `FOR UPDATE` lock on
+  the target `Technician` plus conditional updates on the `Booking` row; a
+  concurrent conflict returns `409`, never an inconsistent booking.
+- An **inactive** technician cannot be newly assigned but may finish jobs already
+  assigned to them.
 
 ## Deliberately Deferred Entities
 

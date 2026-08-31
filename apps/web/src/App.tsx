@@ -13,6 +13,10 @@ import { CataloguePage } from './features/catalogue/CataloguePage';
 import { ServiceDetailPage } from './features/catalogue/ServiceDetailPage';
 import { OperationsBookingDetailPage } from './features/operations/OperationsBookingDetailPage';
 import { OperationsDashboardPage } from './features/operations/OperationsDashboardPage';
+import { OperationsTechnicianDetailPage } from './features/operations/OperationsTechnicianDetailPage';
+import { OperationsTechniciansPage } from './features/operations/OperationsTechniciansPage';
+import { TechnicianJobDetailPage } from './features/technician/TechnicianJobDetailPage';
+import { TechnicianJobsPage } from './features/technician/TechnicianJobsPage';
 import './styles.css';
 
 export function App(): ReactElement {
@@ -67,10 +71,42 @@ export function App(): ReactElement {
               }
             />
             <Route
+              path="/operations/technicians"
+              element={
+                <ProtectedRoute roles={['operations']}>
+                  <OperationsTechniciansPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/operations/technicians/:id"
+              element={
+                <ProtectedRoute roles={['operations']}>
+                  <OperationsTechnicianDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/technician/availability"
               element={
                 <ProtectedRoute roles={['technician']}>
                   <TechnicianAvailabilityPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/technician/bookings"
+              element={
+                <ProtectedRoute roles={['technician']}>
+                  <TechnicianJobsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/technician/bookings/:id"
+              element={
+                <ProtectedRoute roles={['technician']}>
+                  <TechnicianJobDetailPage />
                 </ProtectedRoute>
               }
             />

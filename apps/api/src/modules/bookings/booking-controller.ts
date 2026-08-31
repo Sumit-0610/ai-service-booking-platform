@@ -1,5 +1,9 @@
 import type { Request, RequestHandler } from 'express';
-import { bookingIdParamSchema, createBookingSchema } from '@aisbp/shared';
+import {
+  bookingIdParamSchema,
+  createBookingSchema,
+  technicianJobStatusSchema,
+} from '@aisbp/shared';
 import { AppError } from '../../lib/errors.js';
 import { bookingService } from './booking-service.js';
 
@@ -17,6 +21,13 @@ function technicianId(req: Request): string {
     throw new AppError('FORBIDDEN', 'This account has no technician profile');
   }
   return req.technician.id;
+}
+
+function technicianUserId(req: Request): string {
+  if (!req.user) {
+    throw new AppError('UNAUTHENTICATED', 'Authentication required');
+  }
+  return req.user.id;
 }
 
 const create: RequestHandler = async (req, res) => {
@@ -59,6 +70,18 @@ const getMineAsTechnician: RequestHandler = async (req, res) => {
   res.status(200).json({ booking });
 };
 
+const updateJobStatusAsTechnician: RequestHandler = async (req, res) => {
+  const { id } = bookingIdParamSchema.parse(req.params);
+  const { status } = technicianJobStatusSchema.parse(req.body);
+  const booking = await bookingService.changeJobStatusForTechnician(
+    technicianId(req),
+    technicianUserId(req),
+    id,
+    status,
+  );
+  res.status(200).json({ booking });
+};
+
 export const bookingController = {
   create,
   list,
@@ -67,4 +90,5 @@ export const bookingController = {
   cancel,
   listMineAsTechnician,
   getMineAsTechnician,
+  updateJobStatusAsTechnician,
 };
