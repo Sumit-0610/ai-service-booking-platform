@@ -99,6 +99,16 @@ Indexes:
 - `active`
 - searchable fields as needed by the chosen database strategy
 
+Notes (Milestone 8):
+
+- `basePriceCents` (integer minor units) + `currency` are the **authoritative
+  current price**. The pricing service turns them into a `PriceQuote`
+  (`subtotal = basePriceCents`; `fees = discount = tax = 0`;
+  `total = subtotal + fees + tax - discount`). No fee/tax/discount/coupon rules
+  exist; the zero components are structural. No currency conversion.
+- A `PriceQuote` is a live read. The immutable price snapshot on `Booking` is
+  written only at booking creation (Milestone 9), never by the pricing service.
+
 ### Technician
 
 Operational worker profile linked to a user account.

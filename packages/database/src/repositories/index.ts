@@ -36,4 +36,5 @@ export type {
   CatalogueServiceRow,
   CatalogueSortRow,
   SearchActiveServicesParams,
+  ServicePriceRow,
 } from './catalog-repository.js';

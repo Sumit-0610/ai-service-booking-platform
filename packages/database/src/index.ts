@@ -20,6 +20,7 @@ export type {
   CatalogueServiceRow,
   CatalogueSortRow,
   SearchActiveServicesParams,
+  ServicePriceRow,
 } from './repositories/index.js';
 
 /**

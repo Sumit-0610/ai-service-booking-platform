@@ -86,6 +86,25 @@
 - **Malformed identifiers**: `:id` is validated against `[A-Za-z0-9-]{8,64}`
   before any query.
 
+## Service Pricing Security (implemented — Milestone 8)
+
+- **The client never determines money.** `GET /api/v1/services/:slug/price`
+  takes only a slug path param (Zod-validated). Any `subtotalCents`,
+  `feesTotalCents`, `taxTotalCents`, `discountTotalCents`, `totalCents`,
+  `currency`, or `basePriceCents` in the query string or body is ignored — the
+  server reads the authoritative price from `Service` and computes the quote.
+- **No mass assignment.** The endpoint is a pure read; there is no writable
+  model and no `Booking` is created or touched.
+- **Inactive services are not quotable.** The repository query is scoped
+  `WHERE slug = ? AND active` → inactive or unknown slug returns `404`.
+- **No internal-field leakage.** The response is the explicit `PriceQuote` DTO
+  (7 fields); no raw Prisma object, no `id`, `active`, or `basePriceCents`.
+- **Integer-cents arithmetic only.** `calculateServicePrice` uses integer
+  addition/subtraction — no `parseFloat`, no division, no `Number` coercion of
+  client input, no rounding.
+- **Malformed slug → 422; unknown → 404**, so probing does not reveal whether a
+  given slug exists as an inactive service.
+
 ## API Validation
 
 Use Zod schemas for:

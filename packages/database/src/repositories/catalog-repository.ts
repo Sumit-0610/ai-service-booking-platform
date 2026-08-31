@@ -28,10 +28,16 @@ const serviceSelect = {
   category: { select: { id: true, slug: true, name: true } },
 } satisfies Prisma.ServiceSelect;
 
+const servicePriceSelect = {
+  basePriceCents: true,
+  currency: true,
+} satisfies Prisma.ServiceSelect;
+
 export type CatalogueCategoryRow = Prisma.ServiceCategoryGetPayload<{
   select: typeof categorySelect;
 }>;
 export type CatalogueServiceRow = Prisma.ServiceGetPayload<{ select: typeof serviceSelect }>;
+export type ServicePriceRow = Prisma.ServiceGetPayload<{ select: typeof servicePriceSelect }>;
 
 export type CatalogueSortRow = 'name_asc' | 'name_desc' | 'price_asc' | 'price_desc' | 'newest';
 
@@ -118,6 +124,18 @@ export const catalogRepository = {
     return prisma.service.findFirst({
       where: { slug, active: true },
       select: serviceSelect,
+    });
+  },
+
+  /**
+   * The authoritative current price for an active service, and nothing else.
+   * One indexed read (`Service.slug` unique + `active`), used by the pricing
+   * service to build a quote.
+   */
+  findActivePriceBySlug(slug: string): Promise<ServicePriceRow | null> {
+    return prisma.service.findFirst({
+      where: { slug, active: true },
+      select: servicePriceSelect,
     });
   },
 };

@@ -204,6 +204,73 @@ concurrent requests.
 - Overlapping slots (`10:00–11:00`, `10:30–11:30`) are **rejected** (`409`).
 - Two concurrent overlapping creates: exactly one succeeds, the other gets `409`.
 
+## Service Pricing (implemented — Milestone 8)
+
+### Money representation
+
+Every monetary figure is an **integer number of minor units** ("cents"):
+`1050` means `$10.50`. There is no floating-point arithmetic in pricing. A
+client may name a service (by slug); it may **never** submit a price, subtotal,
+fee, tax, discount, or total — the server derives all of them.
+
+### Public price quote
+
+No authentication. An authenticated customer receives the identical quote. Only
+an **active** service is quotable.
+
+```txt
+GET /api/v1/services/:slug/price   -> 200 { quote: PriceQuote }
+```
+
+- Malformed slug (not `^[a-z0-9]+(?:-[a-z0-9]+)*$`) → `422 VALIDATION_ERROR`.
+- Well-formed slug matching no active service → `404 NOT_FOUND`.
+- The quote reflects `Service.basePriceCents` **at request time** — it is a live
+  price, not a snapshot.
+
+```jsonc
+// PriceQuote
+{
+  "currency": "USD",
+  "subtotalCents": 10000,
+  "feesTotalCents": 0,
+  "discountTotalCents": 0,
+  "taxTotalCents": 0,
+  "totalCents": 10000,
+  "breakdown": { "lines": [{ "label": "Service", "amountCents": 10000 }] },
+}
+```
+
+### Calculation rules (MVP)
+
+```txt
+subtotalCents = Service.basePriceCents
+feesTotalCents = 0
+discountTotalCents = 0
+taxTotalCents = 0
+totalCents = subtotalCents + feesTotalCents + taxTotalCents - discountTotalCents
+currency = Service.currency
+```
+
+`totalCents` always satisfies the PostgreSQL `booking_price_total_consistent`
+CHECK. The zero components are structural placeholders — the product has defined
+no fee, tax, discount, coupon, or multi-currency rules, and none are computed.
+No percentages, so **no rounding** is performed. If percentage-based components
+are added later, their rounding rules must be defined before implementation.
+
+### Price snapshot boundary
+
+```txt
+Service.basePriceCents  ->  pricing service  ->  PriceQuote  ->  (M9) Booking creation  ->  immutable Booking price snapshot
+```
+
+The pricing service is a **pure read**. It never writes a `Booking`. The
+Milestone 9 booking workflow will call the pricing service and persist the
+resulting figures into the booking's immutable snapshot
+(`priceCurrency`, `priceSubtotalCents`, `priceFeesTotalCents`,
+`priceDiscountTotalCents`, `priceTaxTotalCents`, `priceTotalCents`,
+`priceBreakdown`) inside the same transaction that creates the booking. Once
+written, the snapshot never changes, even if `Service.basePriceCents` later does.
+
 ## Booking Endpoints (later milestones)
 
 ```txt

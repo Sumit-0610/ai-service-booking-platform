@@ -12,6 +12,7 @@ import {
   technicianAvailabilityRouter,
 } from './modules/availability/availability-routes.js';
 import { catalogueRouter } from './modules/catalogue/catalogue-routes.js';
+import { pricingRouter } from './modules/pricing/pricing-routes.js';
 
 export function createApp() {
   const app = express();
@@ -46,6 +47,7 @@ export function createApp() {
   app.use('/api/v1/technician/availability', technicianAvailabilityRouter);
   app.use('/api/v1', catalogueRouter);
   app.use('/api/v1', publicAvailabilityRouter);
+  app.use('/api/v1', pricingRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

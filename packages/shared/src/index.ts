@@ -4,6 +4,7 @@ export * from './address.js';
 export * from './auth.js';
 export * from './availability.js';
 export * from './catalogue.js';
+export * from './pricing.js';
 
 export const healthResponseSchema = z.object({
   status: z.literal('ok'),

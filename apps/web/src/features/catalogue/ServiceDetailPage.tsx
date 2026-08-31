@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../lib/api';
 import { formatDuration, formatPrice } from '@aisbp/shared';
 import { ServiceAvailability } from '../availability/ServiceAvailability';
+import { PriceQuoteCard } from '../pricing/PriceQuoteCard';
 import { useService } from './use-catalogue';
 
 export function ServiceDetailPage(): ReactElement {
@@ -87,6 +88,8 @@ export function ServiceDetailPage(): ReactElement {
         </h2>
         <p className="mt-2 whitespace-pre-line text-slate-700">{service.description}</p>
       </div>
+
+      <PriceQuoteCard priceCents={service.priceCents} currency={service.currency} />
 
       <ServiceAvailability slug={service.slug} />
     </main>

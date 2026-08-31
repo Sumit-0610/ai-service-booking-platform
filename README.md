@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 7 (availability & scheduling) is in progress: a public availability lookup for active services (`GET /api/v1/services/:slug/availability`) and technician self-service slot management (`/api/v1/technician/availability`) with per-row ownership and database-enforced overlap prevention, plus customer and technician scheduling UIs. Milestones 1–6 are complete with CI green. Booking creation, technician assignment, pricing, dashboard, and AI features are not implemented yet.
+Milestone 8 (pricing) is in progress: a deterministic pricing calculation (`calculateServicePrice`) and a public live price quote (`GET /api/v1/services/:slug/price`) for active services, returning an explicit `PriceQuote` DTO (integer cents, no fees/tax/discount rules yet), surfaced on the service detail page. Milestones 1–7 are complete with CI green. Booking creation, technician assignment, payments, dashboard, and AI features are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

@@ -176,6 +176,21 @@ startsAt IN [from, to)` ordered by `startsAt`. Served by the existing
 - Ownership: availability is keyed by `Technician.id`, resolved from the
   authenticated `User.id` via the unique `Technician.userId`.
 
+### Pricing (Milestone 8)
+
+- **No schema change, no migration.** No pricing table, no price-history table,
+  no rules table, no JSON rules engine. The existing `Service.basePriceCents` /
+  `Service.currency` (current price) plus the `Booking` snapshot columns are
+  sufficient for the MVP.
+- The pricing service reads one row via `catalogRepository.findActivePriceBySlug`
+  — `SELECT basePriceCents, currency FROM Service WHERE slug = ? AND active`,
+  served by the unique `Service.slug` index. Single indexed read, no join, no
+  N+1.
+- Pricing performs **no writes**. The quote is derived by the pure
+  `calculateServicePrice` function in `@aisbp/shared`; `Booking` persistence of
+  the immutable snapshot is Milestone 9's responsibility (see
+  [API Boundaries](api.md#price-snapshot-boundary)).
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created

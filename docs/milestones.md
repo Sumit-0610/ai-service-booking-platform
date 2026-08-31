@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 7: Availability and scheduling — in progress.**
+**Milestone 8: Pricing — in progress.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–6 are complete with CI green on `origin/main`.
+Milestones 1–7 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -71,7 +71,7 @@ per-row ownership, Zod validation, international model, referential-safe delete,
 and a focused address-management UI. Customer role only. No schema change. See
 [API Boundaries](api.md) and [Security Strategy](security.md).
 
-### M7: Availability and scheduling — in progress
+### M7: Availability and scheduling — complete
 
 Public availability lookup for an active service
 (`GET /api/v1/services/:slug/availability`, bounded time window, future-only,
@@ -84,11 +84,20 @@ no schema change. Booking is **not** implemented. See [API Boundaries](api.md),
 No booking creation, technician assignment, pricing, or AI work in this
 milestone.
 
-### M8: Pricing
+### M8: Pricing — in progress
 
-Simple MVP pricing service and pricing breakdown response. A booking stores the
-final agreed price and breakdown at booking time; later service price changes do
-not affect historical bookings.
+Deterministic, pure pricing calculation (`calculateServicePrice` in
+`@aisbp/shared`) and a public live price quote
+(`GET /api/v1/services/:slug/price`, active service only, explicit `PriceQuote`
+DTO). MVP rule: `subtotal = Service.basePriceCents`; fees, tax, and discount are
+structurally zero (no rules defined). Integer cents only, no floating point, no
+rounding, no currency conversion. The pricing service performs no writes — the
+immutable booking snapshot is Milestone 9. Service detail page shows the quote
+breakdown. No schema change. See [API Boundaries](api.md),
+[Database](database.md), and [Security Strategy](security.md).
+
+No coupons, promotions, subscriptions, payments, rules engine, or booking
+persistence in this milestone.
 
 ### M9: Booking workflow
 
