@@ -42,6 +42,17 @@ const envSchema = z.object({
   // catalogue rows only change via a migration/seed today, so a stale window of
   // a couple of minutes is the whole invalidation strategy.
   CATALOGUE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(120),
+
+  // Claude AI Booking Assistant (Milestone 14). The key is server-side only and
+  // optional — with no key (or AI_ASSISTANT_ENABLED=false) the assistant
+  // endpoints return a safe 503 and the rest of the API is unaffected.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5'),
+  AI_ASSISTANT_ENABLED: booleanFromStringWithDefault(true),
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+  AI_MAX_MESSAGE_CHARS: z.coerce.number().int().positive().default(2_000),
+  AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  AI_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(3600),
 });
 
 const parsed = envSchema.safeParse(process.env);

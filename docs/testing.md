@@ -28,13 +28,21 @@ Integration test focus:
 - error response consistency
 - transaction behavior around booking slots
 
-AI tests:
+AI tests (implemented — Milestone 14, `apps/api/src/modules/ai/ai.integration.test.ts`):
 
-- mock Claude responses
-- validate successful structured intent extraction
-- validate malformed AI output rejection
-- validate clarification flow when required fields are missing
-- verify AI routes do not mutate data directly
+- a scripted fake `ClaudeClient` is injected (`setClaudeClientForTesting`) —
+  real Claude is never called in CI or local tests
+- successful structured intent extraction and service/address/date grounding
+- an invented service slug, an unowned `addressId`, and a past date are all
+  dropped into `missingFields`
+- malformed model output and a thrown Claude error both produce a safe
+  clarification (HTTP 200), not a 5xx
+- `clarify` re-grounds the client-supplied `priorIntent` (no smuggled address)
+- `503` when the assistant is unconfigured; auth (`401`), role (`403`), CSRF
+  (`403`), body validation (`422`), and per-user rate limit (`429`)
+- booking and address counts are unchanged after a batch of assistant calls
+- `availability` returns real slots with only the public DTO fields, and still
+  answers (from a template) when the assistant is off
 
 ## Frontend Tests
 

@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { addressRouter } from './modules/addresses/address-routes.js';
+import { aiAssistantRouter } from './modules/ai/ai-routes.js';
 import { authRouter } from './modules/auth/auth-routes.js';
 import {
   publicAvailabilityRouter,
@@ -50,6 +51,7 @@ export function createApp() {
 
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/addresses', addressRouter);
+  app.use('/api/v1/ai/booking-assistant', aiAssistantRouter);
   app.use('/api/v1/bookings', bookingRouter);
   app.use('/api/v1/operations', operationsRouter);
   app.use('/api/v1/operations', operationsTechnicianRouter);

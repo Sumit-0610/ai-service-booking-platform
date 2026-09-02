@@ -55,7 +55,11 @@ The backend is organized by domain boundary:
 - `bookings`: booking lifecycle, modification, cancellation, status timeline.
 - `technicians`: technician profile and availability management.
 - `operations`: dashboards, assignment, operational views.
-- `ai-assistant`: Claude integration and structured booking intent extraction.
+- `ai`: Claude integration and structured booking intent extraction
+  (Milestone 14). Implemented at `apps/api/src/modules/ai`, behind the
+  `ClaudeClient` boundary at `apps/api/src/lib/claude.ts` (the only Anthropic
+  SDK import). Read-only — it never calls a repository to mutate; booking
+  creation stays on the normal booking flow.
 
 ## Frontend Boundaries
 

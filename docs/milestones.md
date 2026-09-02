@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 14: Claude AI Booking Assistant — not started.**
+**Milestone 15: Unit, integration, and E2E testing — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–13 are complete with CI green on `origin/main`.
+Milestones 1–14 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -185,11 +185,25 @@ per-user response are deliberately **not** cached (see
 [Security Strategy](security.md#cache-security-milestone-13)). No schema change,
 no new dependency (`ioredis` already present).
 
-### M14: Claude AI Booking Assistant
+### M14: Claude AI Booking Assistant — complete
 
-Claude API backend integration, structured intent extraction, schema validation,
-clarification questions, service discovery, and availability assistance. Claude
-never mutates booking or database state directly.
+Customer-only assistant at `/api/v1/ai/booking-assistant/{intent,clarify,availability}`
+(`requireAuth` → `requireRole('customer')` → per-user rate limit → CSRF). A
+Claude client boundary (`apps/api/src/lib/claude.ts`, `@anthropic-ai/sdk`,
+default model `claude-sonnet-5`) wraps the SDK behind an interface the tests
+fake. `intent` / `clarify` force a `record_booking_intent` tool call, then the
+service **re-grounds every field** against real records — a slug that is not an
+active service, an `addressId` the caller does not own, or a past date is
+dropped and reported in `missingFields`. Model output that fails
+`aiBookingIntentSchema`, or a Claude error, returns a safe clarification
+fallback (HTTP 200) — never a 5xx, never a mutation. `availability` returns real
+slots from the availability service with a Claude-written summary (or a template
+when the assistant is unconfigured). With no `ANTHROPIC_API_KEY`, `intent` /
+`clarify` return `503 SERVICE_UNAVAILABLE` and the rest of the API is
+unaffected. React assistant UI at `/assistant`. One new dependency
+(`@anthropic-ai/sdk`); no schema change. See
+[AI Architecture](ai-architecture.md), [API Boundaries](api.md#claude-ai-booking-assistant-milestone-14),
+and [Security Strategy](security.md#ai-assistant-security-milestone-14).
 
 ### M15: Unit, integration, and E2E testing
 

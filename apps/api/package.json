@@ -13,6 +13,7 @@
   "dependencies": {
     "@aisbp/database": "workspace:*",
     "@aisbp/shared": "workspace:*",
+    "@anthropic-ai/sdk": "^0.123.0",
     "@node-rs/argon2": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

@@ -39,7 +39,7 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 13 (Redis caching) is complete: a read-through cache boundary (`apps/api/src/lib/cache.ts`) over the existing Redis connection, wired to the public catalogue only (`GET /api/v1/categories`, `GET /api/v1/services` non-search, `GET /api/v1/services/:slug`). Namespaced, versioned keys built from the validated query allow-list; TTL-only invalidation (120s) because catalogue rows have no runtime write path. Redis is a pure optimisation — every cache failure degrades to a PostgreSQL read. Pricing, availability, search, and every authenticated response are deliberately not cached. No schema change, no new dependency. Milestones 1–13 are complete with CI green. Payments and AI features are not implemented yet.
+Milestone 14 (Claude AI Booking Assistant) is complete: a customer-only assistant at `/api/v1/ai/booking-assistant/{intent,clarify,availability}` backed by a Claude client boundary (`apps/api/src/lib/claude.ts`, `@anthropic-ai/sdk`). It extracts a structured booking intent via a forced tool call, then **re-grounds every field** against real records — an invented service, an unowned address, or a past date is dropped. Malformed model output or a Claude error returns a safe clarification (HTTP 200, never a mutation); with no API key the endpoints return 503 and the rest of the API is unaffected. React assistant UI at `/assistant`. One new dependency (`@anthropic-ai/sdk`); no schema change. Milestones 1–14 are complete with CI green. Payments are not implemented yet.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

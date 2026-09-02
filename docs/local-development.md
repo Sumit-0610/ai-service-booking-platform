@@ -61,6 +61,15 @@ API integration tests use a dedicated logical DB (15) on the same server, so
 running `pnpm test` will not disturb your dev sessions. If Redis is down the
 catalogue still serves from PostgreSQL — the cache is a pure optimisation.
 
+## AI Booking Assistant (Milestone 14)
+
+The `/api/v1/ai/booking-assistant/*` endpoints call the Claude API. Set
+`ANTHROPIC_API_KEY` in `apps/api/.env` to use them locally (see
+`apps/api/.env.example` for `ANTHROPIC_MODEL` and the other knobs). **Without a
+key the endpoints return `503` and the rest of the platform is unaffected.**
+The test suite never calls the real API — it injects a fake Claude client — so
+`pnpm test` needs no key.
+
 ## Run Applications
 
 Run both apps from the repository root:

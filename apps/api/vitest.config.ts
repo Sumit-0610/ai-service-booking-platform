@@ -19,6 +19,9 @@ export default defineConfig({
       LOGIN_RATE_LIMIT_WINDOW_SECONDS: '60',
       REGISTER_RATE_LIMIT_MAX: '5',
       REGISTER_RATE_LIMIT_WINDOW_SECONDS: '60',
+      AI_RATE_LIMIT_MAX: '4',
+      AI_RATE_LIMIT_WINDOW_SECONDS: '60',
+      // No ANTHROPIC_API_KEY in tests — the AI suite injects a fake client.
     },
   },
 });

@@ -266,6 +266,40 @@
 - Cache keys embed only public slugs and pagination integers — no user id,
   email, session id, or other identity.
 
+## AI Assistant Security (Milestone 14)
+
+- **Access control**: `/api/v1/ai/booking-assistant/*` requires `requireAuth` +
+  `requireRole('customer')`; operations and technicians get `403`, anonymous
+  `401`. A per-user Redis rate limit (`AI_RATE_LIMIT_MAX` per window) blunts
+  cost abuse (`429`). All three routes are `POST` and require a CSRF token — the
+  request triggers a paid external call, so a cross-site POST must not be able
+  to spend a user's budget.
+- **Claude output is untrusted input.** The forced-tool result is parsed with
+  `aiBookingIntentSchema`; output that fails validation is discarded for a safe
+  clarification fallback, never returned raw. Every field is then re-grounded:
+  `serviceSlug` / `serviceCandidateSlugs` must be **active** service slugs;
+  `addressId` must belong to the **caller** (checked against
+  `repositories.addresses.listByUser`); `requestedDate` must be a well-formed
+  future date. The model cannot surface an inactive service, another customer's
+  address, or a fabricated one.
+- **No mutation, no repository writes.** The endpoints only read (catalogue,
+  the caller's addresses, public availability) and return a draft. Booking
+  creation stays on `POST /api/v1/bookings` with its own transaction; a Claude
+  suggestion is never the authority for a slot.
+- **`priorIntent` is not trusted.** `clarify` accepts the previous `intent`
+  object as context, but re-grounds every field, so a client cannot smuggle a
+  foreign `addressId` or an unknown `serviceSlug` back through it (tested).
+- **Data minimisation**: the prompt carries only active service `slug`/`name`,
+  the caller's own address `id`/`label`/`city`, today's date, and the user's
+  message. No booking history, no other addresses, no emails, no internal
+  fields, no secrets.
+- **Key handling**: `ANTHROPIC_API_KEY` is read from the environment
+  server-side only and never logged or returned. With no key the endpoints
+  return `503` and the rest of the API is unaffected.
+- **Observability without leakage**: `ai.call` / `ai.validation` / `ai.error`
+  log lines carry operation, model, latency, token counts, and outcome only —
+  never prompt text, completion text, or personal data.
+
 ## API Validation
 
 Use Zod schemas for:

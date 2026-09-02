@@ -84,6 +84,23 @@ Availability queries are likely to be performance-sensitive. They should use ind
 - Do not block normal booking flows on AI unless the user is explicitly using the AI assistant.
 - Cache only non-sensitive, stable context such as active service catalog summaries if useful.
 
+### Implemented (Milestone 14)
+
+- The Claude client (`apps/api/src/lib/claude.ts`) sets a server-side timeout
+  (`AI_REQUEST_TIMEOUT_MS`, default 15s) and `maxRetries: 1`.
+- The assistant is **off the critical path**: it lives on its own
+  `/api/v1/ai/booking-assistant/*` routes; the catalogue, availability, pricing,
+  and booking flows never call Claude.
+- Every AI path has a non-AI fallback: `intent` / `clarify` return a
+  clarification on any Claude error (no retry storm, no 5xx); `availability`
+  returns real slots with a templated summary.
+- A per-user Redis rate limit (`AI_RATE_LIMIT_MAX`) caps cost and load.
+- The prompt reuses the cached catalogue list (Milestone 13) for its service
+  context, so the grounding read is usually a cache hit.
+- No latency benchmark is recorded here — real Claude calls are not made in CI
+  or the local test environment (the tests inject a fake client). Measure
+  against a real key before tuning the model or `max_tokens`.
+
 ## Measurement Plan
 
 As implementation matures, collect:

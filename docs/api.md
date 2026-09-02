@@ -635,21 +635,83 @@ The operations dashboard's `PATCH /operations/bookings/:id/status` remains
 dedicated assign endpoint above (it needs a technician). The technician job flow
 (`assigned -> in_progress -> completed`) is on the technician routes.
 
-## AI Assistant Endpoints
+## Claude AI Booking Assistant (implemented — Milestone 14)
 
-## AI Assistant Endpoints
+`requireAuth -> requireRole('customer')` -> a per-user rate limit
+(`AI_RATE_LIMIT_MAX` / window, `429 RATE_LIMITED`) -> `requireCsrf`.
+Operations and technicians get `403`. Mounted at
+`/api/v1/ai/booking-assistant`.
 
 ```txt
-POST /api/v1/ai/booking-assistant/intent
-POST /api/v1/ai/booking-assistant/clarify
-POST /api/v1/ai/booking-assistant/availability
+POST /api/v1/ai/booking-assistant/intent        -> 200 { intent, matchedService, assistantMessage } | 503
+POST /api/v1/ai/booking-assistant/clarify        -> 200 { intent, matchedService, assistantMessage } | 503
+POST /api/v1/ai/booking-assistant/availability   -> 200 { service, answer, slots, window } | 404
 ```
 
-Responsibilities:
+**These endpoints never mutate state.** They return a _draft_ intent or an
+availability summary; booking creation still goes through
+`POST /api/v1/bookings` with its own transaction and validation. Claude never
+calls a repository and never sees another user's data.
 
-- Extract structured booking intent from natural language.
-- Ask clarification questions when required fields are missing.
-- Answer availability questions using backend-provided service and slot context.
-- Prepare booking drafts only through normal validation and service boundaries.
+### Bodies (all `.strict()`)
 
-AI endpoints must never call repositories directly to mutate state.
+| Endpoint       | Body                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `intent`       | `{ message }` — 1–2000 chars                                                                                                                                                                                                  |
+| `clarify`      | `{ message, priorIntent }` — `priorIntent` is the last returned `intent` object; it is treated purely as context and **every field is re-grounded**, so a foreign `addressId` or unknown `serviceSlug` in it is simply nulled |
+| `availability` | `{ serviceSlug, message?, from?, to? }` — `serviceSlug` must match `^[a-z0-9]+(?:-[a-z0-9]+)*$`; `from`/`to` are ISO-8601 with offset                                                                                         |
+
+### `intent` / `clarify` response
+
+```jsonc
+{
+  "intent": {
+    "serviceSlug": "washing-machine-installation" | null, // a real ACTIVE service, else null
+    "serviceCandidateSlugs": ["dishwasher-installation"],  // other real active slugs
+    "requestedDate": "2026-09-19" | null,                  // YYYY-MM-DD, today or later
+    "requestedTimeOfDay": "morning" | "afternoon" | "evening" | null,
+    "addressId": "clabc…" | null,                          // one of the CALLER's own addresses
+    "notes": "gate code 4321" | null,
+    "missingFields": ["address"],                          // server-authoritative: service | date | address
+    "clarificationQuestion": "Which of your saved addresses should I use?" | null,
+    "confidence": "high" | "medium" | "low"
+  },
+  "matchedService": { "slug", "name", "priceCents", "currency", "durationMinutes" } | null,
+  "assistantMessage": "Here's what I have so far. …"
+}
+```
+
+The model is asked (via a forced `record_booking_intent` tool call) to produce
+this shape; the service then **re-grounds every field against real records**.
+Anything the model invents — a non-existent service slug, an `addressId` the
+caller does not own, a past date — is dropped and listed in `missingFields`.
+If the model returns output that fails schema validation, or the Claude call
+fails, the response is a safe clarification fallback with `confidence: "low"` —
+**HTTP 200, never a 5xx**.
+
+`503 SERVICE_UNAVAILABLE` is returned when the assistant is not configured
+(`ANTHROPIC_API_KEY` unset or `AI_ASSISTANT_ENABLED=false`).
+
+### `availability` response
+
+```jsonc
+{
+  "service": { "slug": "washing-machine-installation", "name": "Washing Machine Installation" },
+  "answer": "There are morning slots on the 18th and 19th.", // Claude summary, or a template
+  "slots": [{ "id", "startsAt", "endsAt", "durationMinutes" }], // ALWAYS from PostgreSQL, never the model
+  "window": { "from": "2026-09-15T…Z", "to": "2026-09-29T…Z" }
+}
+```
+
+`slots` come from the same availability query as
+`GET /api/v1/services/:slug/availability` (public DTO, future-only, active
+technician). An unknown or inactive `serviceSlug` -> `404`. When the assistant
+is unconfigured, `answer` is a plain templated summary and the real slots are
+still returned.
+
+### Source of truth
+
+A cached availability or a Claude-suggested slot is **never** the authority for
+whether a slot can be booked — `POST /api/v1/bookings` re-validates the slot
+inside its transaction (Milestone 9). Claude output is untrusted input,
+validated with Zod before use.

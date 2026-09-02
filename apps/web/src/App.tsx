@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { SiteHeader } from './components/SiteHeader';
 import { AddressesPage } from './features/addresses/AddressesPage';
+import { AiAssistantPage } from './features/ai-assistant/AiAssistantPage';
 import { AccountPage } from './features/auth/AccountPage';
 import { BookingsPage } from './features/bookings/BookingsPage';
 import { TechnicianAvailabilityPage } from './features/availability/TechnicianAvailabilityPage';
@@ -51,6 +52,14 @@ export function App(): ReactElement {
               element={
                 <ProtectedRoute roles={['customer']}>
                   <BookingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assistant"
+              element={
+                <ProtectedRoute roles={['customer']}>
+                  <AiAssistantPage />
                 </ProtectedRoute>
               }
             />

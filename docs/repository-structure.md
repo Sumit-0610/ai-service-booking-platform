@@ -98,6 +98,11 @@ ai-service-booking-platform/
   `modules/session/session-store.ts` (session keys), it is a boundary — services
   call `cache.getOrSet`, controllers never see Redis. Only the catalogue service
   uses it so far.
+- `apps/api/src/lib/claude.ts` (Milestone 14) is the only place the Anthropic
+  SDK is imported. It exposes a `ClaudeClient` interface; `apps/api/src/modules/ai`
+  (service / controller / routes) depends on the interface, and the integration
+  tests inject a fake. `packages/shared/src/ai.ts` holds the intent schema, the
+  request/response DTOs, and the `missingIntentFields` helper.
 - Documentation belongs in `docs` and should be updated when architectural decisions change.
 
 As of Milestone 11 the backend has `apps/api/src/{config,lib,middleware,modules,types}`

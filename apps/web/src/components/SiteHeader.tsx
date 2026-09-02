@@ -23,6 +23,11 @@ export function SiteHeader(): ReactElement {
                   Operations
                 </Link>
               ) : null}
+              {user.role === 'customer' ? (
+                <Link to="/assistant" className="font-medium text-slate-700 hover:text-slate-900">
+                  Assistant
+                </Link>
+              ) : null}
               <Link to="/account" className="font-medium text-slate-700 hover:text-slate-900">
                 {user.name}
               </Link>

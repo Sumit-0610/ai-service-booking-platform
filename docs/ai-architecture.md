@@ -108,3 +108,34 @@ AI calls should log safe metadata such as:
 - token usage if available
 
 Do not log sensitive raw prompts or responses by default.
+
+## Implementation (Milestone 14)
+
+- **Client boundary**: `apps/api/src/lib/claude.ts` wraps `@anthropic-ai/sdk`
+  behind a `ClaudeClient` interface (`extractStructured` / `generateText`). The
+  AI service depends on the interface only; `setClaudeClientForTesting` injects
+  a scripted fake so CI makes no real API call. `getClaudeClient()` returns
+  `null` when `ANTHROPIC_API_KEY` is unset or `AI_ASSISTANT_ENABLED=false`;
+  `intent` / `clarify` then return `503`, `availability` falls back to a
+  template.
+- **Model**: default `claude-sonnet-5` (`ANTHROPIC_MODEL`). `intent` / `clarify`
+  use a **forced tool call** (`record_booking_intent`, `strict: true`) whose
+  `input_schema` mirrors `aiBookingIntentSchema`.
+- **Grounding**: `apps/api/src/modules/ai/ai-service.ts` re-validates every
+  model-produced field against real records (active services, the caller's own
+  addresses, a future calendar date). The model's `missingFields` and
+  `clarificationQuestion` are advisory; the server recomputes `missingFields`
+  deterministically (`missingIntentFields` in `@aisbp/shared`).
+- **Fallback**: model output that fails `aiBookingIntentSchema`, or any Claude
+  error, produces a safe clarification response (`confidence: "low"`,
+  HTTP 200). No path mutates the database.
+- **Availability**: slots always come from the availability service
+  (PostgreSQL). Claude only writes the prose summary and only sees the slot
+  list — never the booking rules.
+- **Logging**: `ai.call` (model, latency, token counts), `ai.validation`
+  (operation, outcome `ok` / `fallback`), `ai.error` (operation, message). No
+  prompt or completion text.
+- **Frontend**: `apps/web/src/features/ai-assistant` — a `/assistant` chat page
+  (customer role). First message → `intent`, follow-ups → `clarify` with the
+  last grounded intent; a complete intent offers a "Review & book" link to the
+  normal service page.

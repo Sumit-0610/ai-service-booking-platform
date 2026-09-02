@@ -348,6 +348,17 @@ Notes (Milestone 11):
 
 The MVP should not start with a complex pricing rules engine, payment ledger, notification system, or multi-technician assignment model. These can be introduced only when a concrete requirement demands them.
 
+## The AI Assistant And The Source Of Truth (Milestone 14)
+
+The Claude AI Booking Assistant produces only a _draft_ `AiBookingIntent` — a
+structured guess at which service, date, and address the customer means. It is
+not a domain entity and writes nothing. Every field it returns is re-grounded
+server-side against real records (active services, the caller's own addresses, a
+future date); a booking is still created only through the normal
+`POST /api/v1/bookings` transaction, which re-validates the slot, ownership, and
+price. Claude never assigns a technician, changes a status, sets a price, or
+touches the database.
+
 ## Caching And The Source Of Truth (Milestone 13)
 
 The Redis cache introduced in Milestone 13 holds only short-lived copies of the
