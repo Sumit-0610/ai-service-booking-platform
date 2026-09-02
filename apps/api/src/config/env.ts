@@ -34,6 +34,14 @@ const envSchema = z.object({
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
   REGISTER_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   REGISTER_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(3600),
+
+  // Redis read-through cache (Milestone 13). The cache is a pure optimisation
+  // over PostgreSQL — disabling it or losing Redis only costs a cache miss.
+  CACHE_ENABLED: booleanFromStringWithDefault(true),
+  // TTL for the public catalogue cache (categories + services). Short by design:
+  // catalogue rows only change via a migration/seed today, so a stale window of
+  // a couple of minutes is the whole invalidation strategy.
+  CATALOGUE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(120),
 });
 
 const parsed = envSchema.safeParse(process.env);

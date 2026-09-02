@@ -94,9 +94,77 @@ clause from this allow-list only — no client-supplied filter is passed through
 Errors: invalid query params or a malformed `:slug` → `422 VALIDATION_ERROR`;
 an unknown or inactive service slug → `404 NOT_FOUND`.
 
+These three responses are served through a Redis read-through cache
+(Milestone 13) — see [Caching](#caching-milestone-13). The cache is transparent:
+the DTO, status codes, validation, pagination, sorting, and 404 behaviour are
+identical whether a response came from PostgreSQL or Redis.
+
 ### Later milestones
 
 `GET /api/v1/availability` and booking endpoints arrive in their own milestones.
+
+## Caching (Milestone 13)
+
+A read-through cache (`apps/api/src/lib/cache.ts`) sits between the catalogue
+service and its repository, over the same single Redis connection used for
+sessions and rate limiting. It is a **pure optimisation** in front of the
+PostgreSQL source of truth.
+
+### What is cached
+
+| Endpoint                        | Key                                                                        | TTL   |
+| ------------------------------- | -------------------------------------------------------------------------- | ----- |
+| `GET /api/v1/categories`        | `cache:catalogue:v1:categories`                                            | 120 s |
+| `GET /api/v1/services` (no `q`) | `cache:catalogue:v1:services:cat=<slug\|_>:sort=<sort>:page=<n>:limit=<n>` | 120 s |
+| `GET /api/v1/services/:slug`    | `cache:catalogue:v1:service:<slug>` (200 responses only)                   | 120 s |
+
+Keys are built **after** Zod validation, from the query allow-list only. Keys
+are namespaced (`cache:`), owner-labelled (`catalogue`), and versioned (`v1`) so
+a contract change is a clean miss, not a decode error. The stored form is an
+explicit JSON envelope (`{ v, data }`) holding the exact DTO; on read it is
+re-parsed against the DTO's Zod schema, so a drifted entry is treated as a miss.
+`CATALOGUE_CACHE_TTL_SECONDS` (default 120) and `CACHE_ENABLED` (default true)
+are the only configuration; TTLs are never hard-coded.
+
+### What is deliberately not cached
+
+- **Free-text search** (`?q=`) — unbounded key space, not a hot path; always live.
+- **Pricing** (`GET /api/v1/services/:slug/price`) — Milestone 8 made the quote a
+  _live_ projection of `Service.basePriceCents`, and there is no service-price
+  write endpoint to hook precise invalidation onto. A TTL cache would serve
+  prices that contradict the "quote reflects the price at request time"
+  contract. Revisit when a price-management endpoint lands.
+- **Availability** (`GET /api/v1/services/:slug/availability`) — time-sensitive,
+  `now`-relative windows, and mutated by two independent write paths (technician
+  slot CRUD and booking creation). Milestone 9 booking creation already
+  re-validates the slot inside its transaction; a cache would add staleness risk
+  for negligible gain.
+- **Every authenticated / per-user response** — customer bookings, technician
+  jobs, operations dashboard/bookings/technicians. Private, per-scope, and
+  frequently mutated.
+
+### Invalidation
+
+Catalogue rows (categories, services, prices) change only through a migration or
+the seed — there is no runtime write path — so invalidation is **TTL-only**. The
+service exposes `catalogueService.invalidate()` (a precise
+`SCAN` + `DEL` over `cache:catalogue:v1:*`, never `FLUSHDB`) for a future
+service-admin milestone to call after a write.
+
+### Redis failure behaviour
+
+Every cache operation is wrapped: a Redis outage, a connection error, a corrupt
+value, or a shape mismatch is logged at `warn` and returns a **cache miss**, so
+the request is served from PostgreSQL. A Redis outage never turns a healthy read
+API into an error. `CACHE_ENABLED=false` bypasses the cache entirely.
+
+### Concurrency
+
+Standard read-through: hit → return; miss → PostgreSQL → populate → return.
+There is no single-flight lock. Concurrent misses on a cold key each run the
+underlying query once; those queries are the sub-millisecond indexed reads
+measured in Milestone 12, so the small stampede window is acceptable for the
+MVP.
 
 ## Authentication Endpoints (implemented — Milestone 4)
 

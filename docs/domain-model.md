@@ -347,3 +347,13 @@ Notes (Milestone 11):
 ## Deliberately Deferred Entities
 
 The MVP should not start with a complex pricing rules engine, payment ledger, notification system, or multi-technician assignment model. These can be introduced only when a concrete requirement demands them.
+
+## Caching And The Source Of Truth (Milestone 13)
+
+The Redis cache introduced in Milestone 13 holds only short-lived copies of the
+public catalogue DTOs (`ServiceCategory`, `Service` lists and detail). It is not
+a domain entity and never an authority. Every stateful decision — a booking's
+status and price snapshot, a slot's availability, a technician's assignment and
+qualifications, resource ownership — is read from PostgreSQL. If Redis is
+unavailable the platform behaves exactly as before, only with more database
+reads on the catalogue path.

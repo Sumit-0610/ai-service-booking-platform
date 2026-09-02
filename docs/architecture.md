@@ -48,6 +48,8 @@ The backend is organized by domain boundary:
 - `users`: shared user profile behavior.
 - `addresses`: customer-owned service locations.
 - `service-catalog`: categories, services, search, filtering, sorting, pagination.
+  Backed by a Redis read-through cache boundary (`apps/api/src/lib/cache.ts`,
+  Milestone 13) — a pure optimisation over PostgreSQL, catalogue endpoints only.
 - `availability`: technician/service time slots and scheduling checks.
 - `pricing`: price calculation and booking price snapshot creation.
 - `bookings`: booking lifecycle, modification, cancellation, status timeline.

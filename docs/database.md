@@ -299,6 +299,23 @@ scheduledStart)`. Status history is `where { bookingId } order by createdAt` →
 - Text `q` search stays `ILIKE` (catalogue and operations); a `pg_trgm` GIN
   index remains the documented scale-up, out of scope for the MVP.
 
+### Redis caching (Milestone 13)
+
+- **No schema change, no migration, no index, no new model.** Redis caching is
+  an application-layer optimisation only; nothing about the relational schema
+  changed and no cache data is part of the relational source of truth.
+- **PostgreSQL stays authoritative.** The read-through cache
+  (`apps/api/src/lib/cache.ts`) serves only the three public catalogue endpoints
+  and holds plain DTO copies with a 120 s TTL. Booking state, price snapshots,
+  technician assignment, availability, ownership, and status transitions are
+  always read from PostgreSQL. A Redis outage degrades a cached read to a direct
+  query.
+- **Invalidation is TTL-only** for the catalogue because categories, services,
+  and `basePriceCents` have no runtime write path (migration/seed only). A
+  future service-admin milestone that adds such a write must call
+  `catalogueService.invalidate()` and consider precise pricing invalidation
+  before caching `GET /api/v1/services/:slug/price`.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created

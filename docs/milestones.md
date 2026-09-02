@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 13: Redis caching — not started.**
+**Milestone 14: Claude AI Booking Assistant — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–12 are complete with CI green on `origin/main`.
+Milestones 1–13 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -168,10 +168,22 @@ a documented deferred optimization). No schema change. See
 [Database](database.md#search-filtering--pagination-performance-milestone-12),
 and [Security Strategy](security.md).
 
-### M13: Redis caching
+### M13: Redis caching — complete
 
-Deliberate caching of hot, non-sensitive read paths. Redis is never a second
-source of truth for booking or availability state.
+A read-through cache boundary (`apps/api/src/lib/cache.ts`) over the existing
+single Redis connection, wired to the **public catalogue** only:
+`GET /api/v1/categories`, `GET /api/v1/services` (non-search), and
+`GET /api/v1/services/:slug`. Namespaced, versioned keys
+(`cache:catalogue:v1:…`) built from the validated query allow-list; TTL-only
+invalidation (`CATALOGUE_CACHE_TTL_SECONDS`, default 120s) because catalogue
+rows have no runtime write path. Redis is a pure optimisation over PostgreSQL —
+every cache failure degrades to a miss, so an outage cannot take a read path
+offline. Free-text search, pricing, availability, and every authenticated /
+per-user response are deliberately **not** cached (see
+[API Boundaries](api.md#caching-milestone-13),
+[Database](database.md#redis-caching-milestone-13), and
+[Security Strategy](security.md#cache-security-milestone-13)). No schema change,
+no new dependency (`ioredis` already present).
 
 ### M14: Claude AI Booking Assistant
 

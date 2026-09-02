@@ -54,10 +54,12 @@ Seeded logins:
 
 ## Redis
 
-The API needs Redis for sessions and login rate limiting. `REDIS_URL` is in
-`apps/api/.env.example`. The API integration tests use a dedicated logical DB
-(15) on the same server, so running `pnpm test` will not disturb your dev
-sessions.
+The API needs Redis for sessions, login rate limiting, and the public catalogue
+read-through cache (Milestone 13). `REDIS_URL` is in `apps/api/.env.example`,
+alongside the optional `CACHE_ENABLED` / `CATALOGUE_CACHE_TTL_SECONDS` knobs. The
+API integration tests use a dedicated logical DB (15) on the same server, so
+running `pnpm test` will not disturb your dev sessions. If Redis is down the
+catalogue still serves from PostgreSQL — the cache is a pure optimisation.
 
 ## Run Applications
 

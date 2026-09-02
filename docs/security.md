@@ -232,6 +232,35 @@
 - `count` and the page query share one filter and one DB snapshot, so totals
   and pages are consistent and no unbounded query is issued.
 
+## Cache Security (Milestone 13)
+
+- **Only public data is cached.** The Redis read-through cache
+  (`apps/api/src/lib/cache.ts`) is wired to exactly three unauthenticated
+  catalogue endpoints (`GET /api/v1/categories`, `GET /api/v1/services`,
+  `GET /api/v1/services/:slug`). No authenticated, customer-, technician-, or
+  operations-scoped response is ever cached, so a cache read can never serve one
+  user's data to another. `requireAuth`, `requireRole`, ownership `where`
+  clauses, and CSRF are unchanged and still run on every request.
+- **The cache never bypasses validation.** Keys are constructed _after_
+  `catalogueQuerySchema` / the slug schema parse. A malformed request returns
+  `422` before any cache access and creates no key (tested). A client cannot
+  craft a query string that writes or probes an arbitrary Redis key: the key is
+  `cache:catalogue:v1:` + a fixed set of validated fields, and a non-slug
+  `:slug` skips the cache entirely.
+- **No authorization decision is cached** — only catalogue DTOs. The stored
+  envelope is re-parsed against the DTO's Zod schema on read; a value that does
+  not match is discarded as a miss, so a poisoned or drifted entry cannot change
+  the response shape or leak internal fields.
+- **404s are not cached**, so probing `:slug` cannot learn (via timing or key
+  existence) whether an inactive service exists — an unknown and an inactive
+  slug are the same `404` as before.
+- **Redis is never a source of truth.** Booking state, price snapshots,
+  technician assignment, ownership, and status transitions are read from
+  PostgreSQL only. A Redis outage degrades every cached read to a direct
+  PostgreSQL query rather than failing.
+- Cache keys embed only public slugs and pagination integers — no user id,
+  email, session id, or other identity.
+
 ## API Validation
 
 Use Zod schemas for:

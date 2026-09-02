@@ -93,6 +93,11 @@ ai-service-booking-platform/
   bookings, technician jobs, operations bookings, operations technicians) builds
   its list contract from it.
 - Prisma schema, migrations, seed script, and the data-access layer belong in `packages/database`. Nothing else imports Prisma or the generated client directly.
+- `apps/api/src/lib/cache.ts` (Milestone 13) is the only place application code
+  reads or writes the Redis cache. Like `lib/redis.ts` (the connection) and
+  `modules/session/session-store.ts` (session keys), it is a boundary — services
+  call `cache.getOrSet`, controllers never see Redis. Only the catalogue service
+  uses it so far.
 - Documentation belongs in `docs` and should be updated when architectural decisions change.
 
 As of Milestone 11 the backend has `apps/api/src/{config,lib,middleware,modules,types}`

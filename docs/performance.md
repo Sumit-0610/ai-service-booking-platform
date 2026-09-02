@@ -50,6 +50,29 @@ Good MVP uses:
 
 Avoid using Redis as a second source of truth for booking or availability state.
 
+### Measured — catalogue cache (Milestone 13)
+
+A read-through cache (`apps/api/src/lib/cache.ts`) was added to the three public
+catalogue endpoints only. Measured at the service layer against the seeded
+database (13 active services), Node 22 / PostgreSQL 14 / Redis 5, all on
+localhost, mean of 200 iterations:
+
+| Call                                 | Cache miss (cold)  | Cache hit (warm) | PostgreSQL queries                                 |
+| ------------------------------------ | ------------------ | ---------------- | -------------------------------------------------- |
+| `listServices` (no `q`)              | ~10 ms (p50 7.8)   | **1.8 ms**       | miss 1 (`findMany`+`count` in one txn) → hit **0** |
+| `getServiceBySlug`                   | ~6 ms              | **1.2 ms**       | miss 1 → hit **0**                                 |
+| `listCategories`                     | ~5.4 ms            | **1.4 ms**       | miss 1 → hit **0**                                 |
+| `listServices` (`?q=wifi`, uncached) | ~6.9 ms every call | n/a              | 1 every call                                       |
+
+A cache hit is one Redis `GET` and zero database round-trips; a miss adds the
+`SET`. End-to-end over Express/supertest the two are within HTTP-overhead noise
+(~13 ms both) on this single-box setup — the ~4–6× data-layer win becomes
+material only under real load or with Redis/PostgreSQL off-box. TTL is 120 s;
+there is no cache stampede protection (concurrent cold misses each run the
+sub-millisecond query once — acceptable per the Milestone 12 query-plan work).
+Pricing and availability were evaluated and left uncached (see
+[API Boundaries](api.md#caching-milestone-13)).
+
 ## Availability Performance
 
 Availability queries are likely to be performance-sensitive. They should use indexed date ranges and service filters. Slot reservation must remain transaction-safe in PostgreSQL even if read queries are cached later.
