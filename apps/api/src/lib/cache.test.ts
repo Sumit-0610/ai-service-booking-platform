@@ -1,8 +1,23 @@
 import { Redis } from 'ioredis';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { closeConnections } from '../test/helpers.js';
-import { cacheKey, createCache } from './cache.js';
+import { cacheKey, createCache, type CacheMetrics } from './cache.js';
 import { redis } from './redis.js';
+
+function newMetrics(): CacheMetrics {
+  const counts = { hit: 0, miss: 0, error: 0 };
+  return {
+    record: (e) => {
+      counts[e] += 1;
+    },
+    snapshot: () => ({ ...counts }),
+    reset: () => {
+      counts.hit = 0;
+      counts.miss = 0;
+      counts.error = 0;
+    },
+  };
+}
 
 /**
  * Cache-boundary tests against the real Redis logical DB (15) the API test
@@ -110,6 +125,22 @@ describe('cache (real Redis)', () => {
     expect(value).toEqual({ fromSource: true });
     expect(loads).toBe(1);
   });
+
+  it('records hit / miss outcomes for observability', async () => {
+    const metrics = newMetrics();
+    const counted = createCache(redis, true, metrics);
+    const key = cacheKey('test', 'metrics');
+
+    await counted.get(key, identity); // miss (absent)
+    await counted.set(key, { a: 1 }, 60);
+    await counted.get(key, identity); // hit
+    await counted.get(key, identity); // hit
+
+    await redis.set(cacheKey('test', 'bad'), 'not json', 'EX', 60);
+    await counted.get(cacheKey('test', 'bad'), identity); // miss (unreadable)
+
+    expect(metrics.snapshot()).toEqual({ hit: 2, miss: 2, error: 0 });
+  });
 });
 
 describe('cache when Redis is unavailable', () => {
@@ -119,13 +150,14 @@ describe('cache when Redis is unavailable', () => {
     maxRetriesPerRequest: 1,
     retryStrategy: () => null,
   });
-  const deadCache = createCache(deadClient, true);
+  const metrics = newMetrics();
+  const deadCache = createCache(deadClient, true, metrics);
 
   afterAll(() => {
     deadClient.disconnect();
   });
 
-  it('falls back to the source of truth instead of failing the request', async () => {
+  it('falls back to the source of truth and records an error outcome', async () => {
     const key = cacheKey('test', 'dead');
     expect(await deadCache.get(key, identity)).toBeNull();
     await expect(deadCache.set(key, { a: 1 }, 60)).resolves.toBeUndefined();
@@ -137,5 +169,7 @@ describe('cache when Redis is unavailable', () => {
     });
     expect(value).toEqual({ servedFromPostgres: true });
     expect(loads).toBe(1);
+    expect(metrics.snapshot().error).toBeGreaterThan(0);
+    expect(metrics.snapshot().hit).toBe(0);
   });
 });

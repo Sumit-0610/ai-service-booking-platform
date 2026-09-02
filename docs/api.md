@@ -151,6 +151,12 @@ service exposes `catalogueService.invalidate()` (a precise
 `SCAN` + `DEL` over `cache:catalogue:v1:*`, never `FLUSHDB`) for a future
 service-admin milestone to call after a write.
 
+If a service is deactivated directly in the database, a previously cached `200`
+for its slug (or a list it appears in) can still be served for **up to the TTL
+(≤ 120 s)** — the accepted eventual-consistency window. `invalidate()` or the
+TTL closes it; the deactivated service then `404`s / drops out of the list, the
+same as an uncached request.
+
 ### Redis failure behaviour
 
 Every cache operation is wrapped: a Redis outage, a connection error, a corrupt
@@ -165,6 +171,15 @@ There is no single-flight lock. Concurrent misses on a cold key each run the
 underlying query once; those queries are the sub-millisecond indexed reads
 measured in Milestone 12, so the small stampede window is acceptable for the
 MVP.
+
+### Observability
+
+`cache.ts` exports `cacheMetrics` — an in-process counter that resolves every
+cache read to exactly one of `hit`, `miss`, or `error` (Redis failed → fell
+through to PostgreSQL). `cacheMetrics.snapshot()` returns `{ hit, miss, error }`
+for a future `/metrics` surface or a test. Errors are also logged at `warn`;
+hits and misses are not logged per request. Payloads, keys with secrets,
+sessions, and personal data are never logged.
 
 ## Authentication Endpoints (implemented — Milestone 4)
 

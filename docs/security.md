@@ -254,6 +254,11 @@
 - **404s are not cached**, so probing `:slug` cannot learn (via timing or key
   existence) whether an inactive service exists — an unknown and an inactive
   slug are the same `404` as before.
+- **Deactivation is eventually consistent, bounded by the TTL.** A service
+  deactivated directly in the database can still be served from a cached `200`
+  for at most 120 s (or until `catalogueService.invalidate()` runs). This is the
+  documented cache window, not an indefinite exposure; after it the service
+  `404`s and drops out of lists. Tested.
 - **Redis is never a source of truth.** Booking state, price snapshots,
   technician assignment, ownership, and status transitions are read from
   PostgreSQL only. A Redis outage degrades every cached read to a direct

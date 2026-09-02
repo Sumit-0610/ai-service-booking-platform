@@ -118,6 +118,22 @@ describe('catalogue cache', () => {
     expect(await cacheKeys()).not.toContain('cache:catalogue:v1:service:legacy-tv-wall-mount');
   });
 
+  it('stops serving a service once it is deactivated and the entry is invalidated', async () => {
+    const ok = await agent().get(`/api/v1/services/${SERVICE_SLUG}`);
+    expect(ok.status).toBe(200); // now cached as a 200
+
+    await prisma.service.update({ where: { slug: SERVICE_SLUG }, data: { active: false } });
+
+    // Within the TTL the stale 200 is still served — the accepted cache window.
+    expect((await agent().get(`/api/v1/services/${SERVICE_SLUG}`)).status).toBe(200);
+
+    // Invalidation (or TTL expiry) closes the window: the deactivated service 404s.
+    await catalogueService.invalidate();
+    expect((await agent().get(`/api/v1/services/${SERVICE_SLUG}`)).status).toBe(404);
+
+    await prisma.service.update({ where: { slug: SERVICE_SLUG }, data: { active: true } });
+  });
+
   it('returns the same DTO shape whether the response is cached or not', async () => {
     const cold = await agent().get(`/api/v1/services/${SERVICE_SLUG}`);
     const warm = await agent().get(`/api/v1/services/${SERVICE_SLUG}`);
