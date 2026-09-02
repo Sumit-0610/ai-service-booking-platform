@@ -39,7 +39,9 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 14 (Claude AI Booking Assistant) is complete: a customer-only assistant at `/api/v1/ai/booking-assistant/{intent,clarify,availability}` backed by a Claude client boundary (`apps/api/src/lib/claude.ts`, `@anthropic-ai/sdk`). It extracts a structured booking intent via a forced tool call, then **re-grounds every field** against real records — an invented service, an unowned address, or a past date is dropped. Malformed model output or a Claude error returns a safe clarification (HTTP 200, never a mutation); with no API key the endpoints return 503 and the rest of the API is unaffected. React assistant UI at `/assistant`. One new dependency (`@anthropic-ai/sdk`); no schema change. Milestones 1–14 are complete with CI green. Payments are not implemented yet.
+Milestone 15 (unit, integration, and E2E testing) is complete: a deliberate three-layer strategy — Vitest unit tests for `packages/shared` pure logic, Vitest + real PostgreSQL/Redis integration tests for every API module (auth, authz, CSRF, rate limiting, catalogue cache, bookings + double-booking under concurrency, operations, technician flow, AI assistant with a faked Claude), React Testing Library component tests, and a new Playwright (`apps/e2e`) suite covering the customer / operations / technician / AI-assistant / access-control journeys against the built stack. Claude is never called from CI (a deterministic in-process stub, ignored in production). Coverage is measured (`pnpm test:coverage`) and reported, not gated. CI runs all layers. New dev dependencies only (`@playwright/test`, `@vitest/coverage-v8`); no schema or production behaviour change. Milestones 1–15 are complete with CI green. Payments are not implemented yet.
+
+See [docs/testing.md](docs/testing.md) for the full strategy.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 

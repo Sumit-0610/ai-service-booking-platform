@@ -73,8 +73,30 @@ jobs:
       - name: Seed the database
         run: pnpm --filter @aisbp/database db:seed
 
-      - name: Test
-        run: pnpm test
+      - name: Unit and integration tests (with coverage)
+        run: pnpm test:coverage
 
       - name: Build
         run: pnpm build
+
+      - name: Cache Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browser
+        run: pnpm --filter @aisbp/e2e exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+        env:
+          CI: 'true'
+
+      - name: Upload E2E report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 7

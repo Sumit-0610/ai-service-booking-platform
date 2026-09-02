@@ -49,6 +49,10 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5'),
   AI_ASSISTANT_ENABLED: booleanFromStringWithDefault(true),
+  // Deterministic in-process Claude stub for E2E tests — no network call, no key.
+  // Ignored in production (guarded in `getClaudeClient`). Never a security bypass:
+  // the AI endpoints re-ground every field server-side regardless of the source.
+  AI_ASSISTANT_STUB: booleanFromStringWithDefault(false),
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   AI_MAX_MESSAGE_CHARS: z.coerce.number().int().positive().default(2_000),
   AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),

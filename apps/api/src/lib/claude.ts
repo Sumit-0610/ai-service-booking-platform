@@ -123,6 +123,68 @@ function realClient(apiKey: string): ClaudeClient {
   };
 }
 
+/**
+ * A deterministic, in-process Claude stand-in for E2E tests (`AI_ASSISTANT_STUB=true`).
+ * It never calls the network and needs no API key. It does only trivial keyword
+ * matching against the SERVICES / ADDRESSES lists embedded in the system prompt —
+ * it is not a model. Server-side grounding still runs on its output, so this is
+ * an optimisation of the test harness, never a change to what the API trusts.
+ * Guarded out of production in `getClaudeClient()`.
+ */
+export function stubClaudeClient(): ClaudeClient {
+  const listItems = (system: string, header: string): Array<{ id: string; text: string }> => {
+    const block = system.split(`${header}:`)[1]?.split('\n\n')[0] ?? '';
+    return block
+      .split('\n')
+      .map((line) => line.match(/^- (\S+) : (.+)$/))
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map((m) => ({ id: m[1] as string, text: (m[2] as string).toLowerCase() }));
+  };
+
+  return {
+    extractStructured: async (req) => {
+      const text = req.userContent.toLowerCase();
+      const services = listItems(req.system, 'SERVICES');
+      const addresses = listItems(req.system, 'ADDRESSES');
+      const today = req.system.match(/TODAY: (\d{4}-\d{2}-\d{2})/)?.[1] ?? '2026-01-01';
+
+      const messageWords = new Set(text.split(/[^a-z0-9]+/).filter((w) => w.length > 3));
+      const scored = services
+        .map((s) => ({
+          service: s,
+          score: s.text.split(/[^a-z0-9]+/).filter((w) => w.length > 3 && messageWords.has(w))
+            .length,
+        }))
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score);
+      const matched = scored[0]?.service;
+      const tomorrow = new Date(`${today}T00:00:00.000Z`);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      const wantsDate = /tomorrow|next|today|\bon \d|saturday|sunday|monday|week/.test(text);
+      const wantsHome = /home|address|there|my place|house/.test(text);
+
+      const data = {
+        serviceSlug: matched ? matched.id : null,
+        serviceCandidateSlugs: [] as string[],
+        requestedDate: matched && wantsDate ? tomorrow.toISOString().slice(0, 10) : null,
+        requestedTimeOfDay: null,
+        addressId: (wantsHome || matched) && addresses[0] ? addresses[0].id : null,
+        notes: null,
+        missingFields: [] as string[],
+        clarificationQuestion: matched ? null : 'Which service do you need?',
+        confidence: matched ? 'high' : 'low',
+      };
+      return { data, model: 'stub', latencyMs: 0, usage: { inputTokens: 0, outputTokens: 0 } };
+    },
+    generateText: async () => ({
+      text: 'Here are the appointment times currently available.',
+      model: 'stub',
+      latencyMs: 0,
+      usage: { inputTokens: 0, outputTokens: 0 },
+    }),
+  };
+}
+
 let memoized: ClaudeClient | null | undefined;
 let testOverride: ClaudeClient | null | undefined;
 
@@ -141,8 +203,14 @@ export function setClaudeClientForTesting(client: ClaudeClient | null): void {
 export function getClaudeClient(): ClaudeClient | null {
   if (testOverride !== undefined) return testOverride;
   if (memoized === undefined) {
-    memoized =
-      env.AI_ASSISTANT_ENABLED && env.ANTHROPIC_API_KEY ? realClient(env.ANTHROPIC_API_KEY) : null;
+    if (env.AI_ASSISTANT_STUB && !env.isProduction) {
+      memoized = stubClaudeClient();
+    } else {
+      memoized =
+        env.AI_ASSISTANT_ENABLED && env.ANTHROPIC_API_KEY
+          ? realClient(env.ANTHROPIC_API_KEY)
+          : null;
+    }
   }
   return memoized;
 }

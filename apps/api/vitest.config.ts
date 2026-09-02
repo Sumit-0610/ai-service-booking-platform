@@ -9,6 +9,12 @@ export default defineConfig({
     // The integration suites share one PostgreSQL database and one Redis DB and
     // reset them between tests, so test files must not run concurrently.
     fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'text', 'json-summary'],
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/server.ts', 'src/test/**'],
+    },
     env: {
       NODE_ENV: 'test',
       REDIS_URL: `${redisBase}/15`,

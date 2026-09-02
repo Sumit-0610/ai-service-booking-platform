@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 15: Unit, integration, and E2E testing — not started.**
+**Milestone 16: Security and performance review — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–14 are complete with CI green on `origin/main`.
+Milestones 1–15 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -205,10 +205,32 @@ unaffected. React assistant UI at `/assistant`. One new dependency
 [AI Architecture](ai-architecture.md), [API Boundaries](api.md#claude-ai-booking-assistant-milestone-14),
 and [Security Strategy](security.md#ai-assistant-security-milestone-14).
 
-### M15: Unit, integration, and E2E testing
+### M15: Unit, integration, and E2E testing — complete
 
-Vitest unit and integration coverage, React Testing Library component coverage,
-and Playwright end-to-end journeys.
+A deliberate three-layer strategy (see [Testing Strategy](testing.md)):
+
+- **Unit** (Vitest, no I/O) — `packages/shared` pure logic: pricing, pagination,
+  booking state machine, AI intent schema + `missingIntentFields`, **new**
+  `checkSlotTimes` / `durationMinutes`, `formatPrice` / `formatDuration`,
+  `countrySchema` / `formatAddress` / address schemas.
+- **Integration** (Vitest + real PostgreSQL + Redis, `supertest`) — every API
+  module: auth / authz / CSRF / rate limiting, catalogue + cache hit/miss +
+  failure fallback, addresses + IDOR, availability + overlap constraint,
+  pricing, bookings (transaction, price snapshot, **double-booking under
+  concurrency asserted against persisted state**), operations (transitions,
+  assignment, `FOR UPDATE`), technician job flow, AI assistant (fake Claude).
+- **Component** (Vitest + jsdom + Testing Library) — `apps/web` routes/forms.
+- **E2E** (Playwright / Chromium, new `apps/e2e`) — 5 specs against the built
+  web + API + real DB/Redis: customer booking + cancel, operations confirm +
+  assign, technician `start → complete`, AI assistant handoff **through the
+  normal booking flow**, and role/access guards. Claude is a deterministic
+  in-process stub (`AI_ASSISTANT_STUB`, ignored in production) — no real
+  Anthropic call in CI.
+
+Coverage is measured (`@vitest/coverage-v8`, `pnpm test:coverage`) and reported,
+not gated. CI gained a coverage-reporting test step plus Playwright browser
+cache + E2E steps. New dev dependencies: `@playwright/test`,
+`@vitest/coverage-v8`. No schema change, no production behaviour change.
 
 ### M16: Security and performance review
 

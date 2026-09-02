@@ -12,6 +12,8 @@
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
+    "test:coverage": "pnpm -r run test:coverage",
+    "test:e2e": "pnpm --filter @aisbp/e2e run e2e",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "db:migrate:deploy": "pnpm --filter @aisbp/database db:migrate:deploy",

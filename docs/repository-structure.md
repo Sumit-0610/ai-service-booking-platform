@@ -103,6 +103,11 @@ ai-service-booking-platform/
   (service / controller / routes) depends on the interface, and the integration
   tests inject a fake. `packages/shared/src/ai.ts` holds the intent schema, the
   request/response DTOs, and the `missingIntentFields` helper.
+- `apps/e2e` (`@aisbp/e2e`, Milestone 15) is the Playwright end-to-end suite:
+  `playwright.config.ts` (builds + starts the real web and API), `global-setup.ts`
+  (deterministic DB + Redis reset), and `tests/*.spec.ts` (one high-value user
+  journey each). It has `lint` / `typecheck` / `e2e` scripts but no `build` or
+  `test` script, so `pnpm build` / `pnpm test` skip it; `pnpm test:e2e` runs it.
 - Documentation belongs in `docs` and should be updated when architectural decisions change.
 
 As of Milestone 11 the backend has `apps/api/src/{config,lib,middleware,modules,types}`

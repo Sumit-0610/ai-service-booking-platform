@@ -1,0 +1,21 @@
+{
+  "name": "@aisbp/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@aisbp/config": "workspace:*",
+    "@aisbp/database": "workspace:*",
+    "@aisbp/shared": "workspace:*",
+    "@playwright/test": "1.62.1",
+    "@types/node": "^24.3.0",
+    "ioredis": "^6.0.0",
+    "typescript": "^5.9.2"
+  }
+}

@@ -3,3 +3,6 @@ pnpm-lock.yaml
 **/coverage/**
 **/generated/**
 **/migrations/**
+**/playwright-report/**
+**/test-results/**
+**/blob-report/**
