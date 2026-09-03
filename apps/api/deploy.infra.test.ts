@@ -63,6 +63,15 @@ describe('docker-compose.prod.yml', () => {
     // The Postgres password is a documented local default, supplied via ${VAR:-default}.
     expect(prodCompose).toMatch(/POSTGRES_PASSWORD:\s*\$\{POSTGRES_PASSWORD:-/);
   });
+
+  it('tolerates an unset optional API key passed as an empty string', () => {
+    // Compose forwards ${ANTHROPIC_API_KEY:-} as "" when the host var is unset.
+    expect(prodCompose).toMatch(/ANTHROPIC_API_KEY:\s*\$\{ANTHROPIC_API_KEY:-\}/);
+    // The env schema must treat "" as absent, not as an invalid key, or the
+    // production API exits on boot and never becomes healthy.
+    const envSource = read('apps/api/src/config/env.ts');
+    expect(envSource).toMatch(/ANTHROPIC_API_KEY:\s*z\.preprocess\(/);
+  });
 });
 
 describe('docker-compose.yml (dev infra)', () => {

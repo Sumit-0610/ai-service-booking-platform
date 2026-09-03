@@ -45,8 +45,13 @@ const envSchema = z.object({
 
   // Claude AI Booking Assistant (Milestone 14). The key is server-side only and
   // optional — with no key (or AI_ASSISTANT_ENABLED=false) the assistant
-  // endpoints return a safe 503 and the rest of the API is unaffected.
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // endpoints return a safe 503 and the rest of the API is unaffected. An empty
+  // string (a common way container runtimes pass an unset variable) is treated
+  // as absent, not as an invalid key.
+  ANTHROPIC_API_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
   ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5'),
   AI_ASSISTANT_ENABLED: booleanFromStringWithDefault(true),
   // Deterministic in-process Claude stub for E2E tests — no network call, no key.
