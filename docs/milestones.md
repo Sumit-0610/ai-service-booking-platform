@@ -308,6 +308,11 @@ it). The only Prisma change is a generator config: `binaryTargets` gained
 image — no data-model change, no migration (`prisma migrate diff` reports no
 difference).
 
+One config-parsing fix went with the compose file: the optional
+`ANTHROPIC_API_KEY` now treats an empty string as absent, because Compose
+forwards `${ANTHROPIC_API_KEY:-}` as `""` when the host variable is unset and
+the previous schema rejected that, exiting the API on boot.
+
 ### M18: Deployment
 
 Deployment configuration and documentation.
