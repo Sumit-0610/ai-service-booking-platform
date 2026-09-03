@@ -31,6 +31,12 @@ docker compose up -d postgres redis
 ```
 
 PostgreSQL listens on `localhost:5432` and Redis listens on `localhost:6379`.
+This is the dev stack — you run `apps/api` and `apps/web` on the host.
+
+To instead run the **whole platform in containers** (production images, API on
+`:4000`, web on `:8080`), use `docker compose -f docker-compose.prod.yml up -d
+--build`. See
+[Repository Structure](repository-structure.md#containerisation-milestone-17).
 
 ## Set Up the Database
 

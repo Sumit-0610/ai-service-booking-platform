@@ -1,0 +1,32 @@
+# Keep the build context small and free of host-specific / secret material.
+# The Dockerfiles install dependencies and generate the Prisma client from
+# scratch, so anything built or downloaded on the host is deliberately excluded.
+
+**/node_modules
+**/dist
+**/coverage
+**/generated
+**/*.tsbuildinfo
+
+.git
+.github
+.vscode
+.idea
+
+# Secrets — never in an image. `.env.example` files are the only ones kept.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Test / tooling output
+**/playwright-report
+**/test-results
+**/blob-report
+*.log
+.DS_Store
+
+# Docs and local infra are not needed to build the images
+docs
+docker-compose.yml
+docker-compose.prod.yml
+*.md

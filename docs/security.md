@@ -389,6 +389,46 @@ Invalid requests should return a consistent validation error without reaching bu
 - Provide `.env.example` later with placeholder values only.
 - CI and deployment secrets should live in GitHub Actions or hosting provider secret stores.
 
+## Container & CI/CD Security (Milestone 17)
+
+**Secrets** — no API key, database password, session secret, or production
+origin is written into any Dockerfile, into `docker-compose*.yml`, or into
+`.github/workflows/ci.yml`. Compose reads them from the environment
+(`${POSTGRES_PASSWORD:-app_password}`, `${ANTHROPIC_API_KEY:-}`, …); the
+`app_password` default is a documented **local** value only. `.env` /
+`.env.*` (except `.env.example`) are git-ignored and `.dockerignore`d, so a
+developer `.env` can never enter an image. The CI `docker` job needs no
+repository secret. `apps/api/deploy.infra.test.ts` fails the build if a
+`sk-ant-…` string or a non-example `https://…` origin appears in a compose file.
+
+**Runtime** — the API runtime image is a minimal `node:22-alpine` with only the
+built JS, the generated Prisma client, and pruned production `node_modules` (no
+`typescript`, `tsx`, `vitest`, `supertest`, `prisma` CLI, or source tree). It
+runs as the non-root `node` user and starts `node dist/server.js` — never a dev
+watcher. The web image is `nginx-unprivileged` (uid 101, port 8080). The
+migrator image keeps the Prisma CLI but only ever runs `prisma migrate deploy`
+(committed migrations); it never resets or force-pushes the schema, and it is a
+one-shot container that exits.
+
+**Networking** — in `docker-compose.prod.yml`, PostgreSQL and Redis are on
+`expose:` only (reachable inside the compose network, never a host port). Only
+the API (`4000`) and web (`8080`) are host-published. The browser-facing API URL
+is an explicit build arg, so the SPA never ships a container-internal address.
+
+**Fail-closed configuration** — `apps/api/src/config/env.ts` throws on a missing
+or malformed `DATABASE_URL` / `REDIS_URL`, so a misconfigured production
+container exits immediately rather than starting in a broken state.
+`AI_ASSISTANT_STUB` is ignored when `NODE_ENV=production` (guarded in
+`getClaudeClient`), so the E2E stub can never become a production auth bypass.
+
+**Health checks** expose nothing sensitive: `/api/v1/health` returns
+`{ status, service, timestamp }` only; the Postgres/Redis probes are
+`pg_isready` / `redis-cli ping`.
+
+No vulnerability scanner is added — the M17 specification does not call for one,
+and adding one without a triage policy would be scanner noise (see the M17
+prompt §14).
+
 ## Error Handling (implemented)
 
 - One error envelope everywhere: `{ "error": { "code", "message", "details"? } }`.

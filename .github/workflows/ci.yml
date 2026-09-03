@@ -100,3 +100,62 @@ jobs:
           name: playwright-report
           path: apps/e2e/playwright-report/
           retention-days: 7
+
+  # Milestone 17 — prove the production Docker images build and the full stack
+  # (PostgreSQL 16, Redis 7, one-shot migrator, API, nginx web) comes up healthy.
+  # Independent of `validate`; neither weakens the other.
+  docker:
+    name: Docker images & stack smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate compose files
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.prod.yml config --quiet
+
+      - name: Build production images
+        run: docker compose -f docker-compose.prod.yml build
+
+      - name: Start the stack and wait for health
+        # Bringing up `api` + `web` pulls in postgres, redis, and the one-shot
+        # migrator via `depends_on`; `--wait` tracks the two long-running
+        # services' health checks.
+        run: docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 240 api web
+
+      - name: API /api/v1/health responds ok
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            http://localhost:4000/api/v1/health | tee /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
+
+      - name: Web serves the SPA shell
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            http://localhost:8080/ | grep -q 'id="root"'
+
+      - name: Committed migrations were applied to the clean database
+        run: |
+          count=$(docker compose -f docker-compose.prod.yml exec -T postgres \
+            psql -U app -d ai_service_booking_platform -tAc \
+            "select count(*) from _prisma_migrations where finished_at is not null")
+          echo "applied migrations: ${count}"
+          test "${count}" -ge 2
+
+      - name: Migrator is idempotent on re-run
+        run: |
+          docker compose -f docker-compose.prod.yml run --rm migrator | tee /tmp/migrate.log
+          grep -q "No pending migrations to apply" /tmp/migrate.log
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down --volumes --remove-orphans

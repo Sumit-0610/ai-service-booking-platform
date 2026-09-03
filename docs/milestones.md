@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 17: Docker and CI/CD — not started.**
+**Milestone 18: Deployment — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–16 are complete with CI green on `origin/main`.
+Milestones 1–17 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -269,10 +269,40 @@ scale-up triggers are documented in
 [Security](security.md#security--performance-review-milestone-16) and
 [Database](database.md#performance-review-milestone-16).
 
-### M17: Docker and CI/CD
+### M17: Docker and CI/CD — complete
 
-Application Docker images, CI hardening, and pipeline coverage for the full test
-suite including E2E smoke tests.
+Production-oriented containerisation, no change to application behaviour.
+
+- **`apps/api/Dockerfile`** — multi-stage (`build` → `prod-deps` → `runtime`,
+  plus a `migrator` target). `node:22-alpine` + `openssl`; a full workspace
+  install builds `@aisbp/shared` + `@aisbp/database` + the API with `tsc`, a
+  second install prunes to production dependencies, and the `runtime` stage
+  copies only the built JS, the generated Prisma client, and the pruned
+  `node_modules`. Runs as `node` (non-root), `CMD ["node", "dist/server.js"]`,
+  with an image `HEALTHCHECK` against `/api/v1/health`.
+- **`apps/web/Dockerfile`** — builds only the web subgraph (no Prisma), then
+  serves the static `dist/` from `nginxinc/nginx-unprivileged` with SPA history
+  fallback (`apps/web/nginx.conf`). `VITE_API_BASE_URL` is a build arg — the
+  browser-reachable API URL.
+- **`docker-compose.prod.yml`** — the full stack: `postgres:16-alpine`,
+  `redis:7-alpine` (neither host-published), a one-shot `migrator`
+  (`prisma migrate deploy`, `depends_on` Postgres healthy), the `api` (depends
+  on Postgres + Redis healthy **and** the migrator completed), and the `web`
+  image (depends on the API healthy). Service-name networking; health checks on
+  every service. `docker-compose.yml` stays the lightweight dev infra
+  (Postgres + Redis only).
+- **CI** — the `validate` job is unchanged (all M1–M16 gates). A new `docker`
+  job builds the three production images, brings the stack up with
+  `--wait`, asserts `/api/v1/health`, that the SPA shell is served, that the
+  committed migrations were applied to the clean database, and that a second
+  migrator run is a no-op.
+- **`.dockerignore`** keeps `node_modules`, build output, the generated Prisma
+  client, and every `.env` (except `.env.example`) out of the build context.
+
+`apps/api/deploy.infra.test.ts` guards the container config (no re-published DB
+port, health checks present, no destructive migration command, non-root, no
+committed secret). No schema change; `prisma` stays a devDependency (the
+migrator image keeps it).
 
 ### M18: Deployment
 

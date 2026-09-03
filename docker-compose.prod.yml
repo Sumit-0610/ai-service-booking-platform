@@ -1,0 +1,117 @@
+# Full containerised stack — PostgreSQL, Redis, a one-shot migrator, the API,
+# and the nginx-served web build. This runs the *production* images locally for
+# integration/demo purposes; a real deployment supplies its own secrets, TLS
+# termination, and origins (see docs/repository-structure.md).
+#
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+#   # API   -> http://localhost:4000/api/v1/health
+#   # web   -> http://localhost:8080
+#
+# Networking inside the compose network uses service names:
+#   browser  -> localhost:4000        (API, host-published)
+#   browser  -> localhost:8080        (web, host-published)
+#   api      -> postgres:5432         (service name, not published)
+#   api      -> redis:6379            (service name, not published)
+#   migrator -> postgres:5432
+
+x-db-url: &db-url postgresql://app:${POSTGRES_PASSWORD:-app_password}@postgres:5432/ai_service_booking_platform
+x-redis-url: &redis-url redis://redis:6379
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ai_service_booking_platform
+      POSTGRES_USER: app
+      # Local default only — override in any real environment.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+    volumes:
+      - postgres-prod-data:/var/lib/postgresql/data
+    # No host port: only the compose network reaches PostgreSQL.
+    expose:
+      - '5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app -d ai_service_booking_platform']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    expose:
+      - '6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: applies only committed migrations (`prisma migrate deploy`), then
+  # exits. It never resets or force-pushes the schema.
+  migrator:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrator
+    environment:
+      DATABASE_URL: *db-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    environment:
+      NODE_ENV: production
+      PORT: '4000'
+      DATABASE_URL: *db-url
+      REDIS_URL: *redis-url
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      # This local stack is plain HTTP, so the browser will not send a Secure
+      # cookie — a real TLS deployment removes this override.
+      COOKIE_SECURE: 'false'
+      # Optional — the assistant returns 503 when unset.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - '${API_PORT:-4000}:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the bundle — must be browser-reachable.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:4000}
+    ports:
+      - '${WEB_PORT:-8080}:8080'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-prod-data:

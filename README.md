@@ -39,9 +39,9 @@ This project is a normal service booking and operations platform. AI is an addit
 
 ## Current Status
 
-Milestone 15 (unit, integration, and E2E testing) is complete: a deliberate three-layer strategy — Vitest unit tests for `packages/shared` pure logic, Vitest + real PostgreSQL/Redis integration tests for every API module (auth, authz, CSRF, rate limiting, catalogue cache, bookings + double-booking under concurrency, operations, technician flow, AI assistant with a faked Claude), React Testing Library component tests, and a new Playwright (`apps/e2e`) suite covering the customer / operations / technician / AI-assistant / access-control journeys against the built stack. Claude is never called from CI (a deterministic in-process stub, ignored in production). Coverage is measured (`pnpm test:coverage`) and reported, not gated. CI runs all layers. New dev dependencies only (`@playwright/test`, `@vitest/coverage-v8`); no schema or production behaviour change. Milestones 1–15 are complete with CI green. Payments are not implemented yet.
+Milestone 17 (Docker and CI/CD) is complete: production-oriented, multi-stage Dockerfiles for the API (`node:22-alpine`, non-root, minimal runtime, image health check, plus a one-shot `migrator` target) and the web build (`nginx-unprivileged` serving the static SPA); `docker-compose.prod.yml` runs the full stack with service-name networking, health checks, PostgreSQL/Redis kept off host ports, and `prisma migrate deploy` (committed migrations only) gated ahead of the API. CI gained a `docker` job that builds the three images, brings the stack up with `--wait`, and asserts `/api/v1/health`, the served SPA shell, and that migrations landed on a clean database — the existing `validate` job (format, lint, typecheck, Prisma, migrate, seed, unit/integration/coverage, build, Playwright E2E) is unchanged. No schema change, no new dependency. Milestones 1–17 are complete with CI green. Payments are not implemented yet.
 
-See [docs/testing.md](docs/testing.md) for the full strategy.
+See [docs/testing.md](docs/testing.md) for the full test strategy and [docs/repository-structure.md](docs/repository-structure.md#containerisation-milestone-17) for the Docker layout.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
 
@@ -63,3 +63,20 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+## Run the whole stack in Docker
+
+```bash
+cp .env.example .env          # optional — every value has a local default
+docker compose -f docker-compose.prod.yml up -d --build
+# API   -> http://localhost:4000/api/v1/health
+# web   -> http://localhost:8080
+docker compose -f docker-compose.prod.yml down -v
+```
+
+The `migrator` service applies committed migrations before the API starts;
+the database is **not** seeded automatically. To seed the containerised
+database, run `docker compose -f docker-compose.prod.yml run --rm migrator sh -c
+'pnpm --filter @aisbp/database db:seed'`. See
+[docs/repository-structure.md](docs/repository-structure.md#containerisation-milestone-17)
+for the browser/container/service URL distinctions and the deployment boundary.

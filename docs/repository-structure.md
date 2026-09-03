@@ -75,8 +75,14 @@ ai-service-booking-platform/
     milestones.md
   .github/
     workflows/
-      ci.yml
-  docker-compose.yml
+      ci.yml             two jobs: `validate` (M1–M16 gates) and `docker`
+  apps/api/Dockerfile    multi-stage; targets: build, prod-deps, migrator, runtime
+  apps/web/Dockerfile    web build → nginx-unprivileged static server
+  apps/web/nginx.conf    SPA history fallback + asset caching
+  .dockerignore
+  docker-compose.yml     dev infra — PostgreSQL + Redis only
+  docker-compose.prod.yml  full stack — postgres, redis, migrator, api, web
+  .env.example           variables read by docker-compose.prod.yml
   pnpm-workspace.yaml
   package.json
   README.md
@@ -119,3 +125,36 @@ Other planned directories appear as the milestones that need them land.
 ## MVP Constraint
 
 This structure should support a realistic portfolio project without introducing microservices. The boundary is modular, but deployment can remain simple.
+
+## Containerisation (Milestone 17)
+
+Two Compose files, two purposes:
+
+| File                      | Contents                                                                                                                  | Use                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `docker-compose.yml`      | PostgreSQL 16 + Redis 7, host-published                                                                                   | local dev — you run `apps/api` / `apps/web` on the host                              |
+| `docker-compose.prod.yml` | postgres, redis, migrator, api, web — production images, service-name networking, PostgreSQL/Redis **not** host-published | run the built stack locally (integration/demo) or as the basis for a real deployment |
+
+**Networking distinctions** (documented in `docker-compose.prod.yml`):
+
+| Hop                   | Address                                         |
+| --------------------- | ----------------------------------------------- |
+| browser → API         | `http://localhost:${API_PORT}` (host-published) |
+| browser → web         | `http://localhost:${WEB_PORT}` (host-published) |
+| API → PostgreSQL      | `postgres:5432` (compose service name)          |
+| API → Redis           | `redis:6379` (compose service name)             |
+| migrator → PostgreSQL | `postgres:5432`                                 |
+
+`VITE_API_BASE_URL` is baked into the web bundle at **image build time**, so it
+must be the browser-reachable host URL — never a compose service name.
+
+**Migration flow.** `prisma migrate deploy` runs once, in the `migrator`
+one-shot container, before the API starts (`api` `depends_on` `migrator:
+service_completed_successfully`). Only committed migrations are applied; the
+image never runs `migrate reset`, `migrate dev`, or `db push`. Seeding is
+**not** part of the production startup — it is a separate developer/CI action
+(`pnpm --filter @aisbp/database db:seed`).
+
+**Deployment boundary.** M17 produces validated build artifacts (the three
+images) and a Compose stack that runs them. It does **not** define a cloud
+target, a registry push, or infrastructure-as-code — that is Milestone 18.

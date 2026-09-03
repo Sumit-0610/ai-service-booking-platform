@@ -202,12 +202,27 @@ a focus — their logic lives in `packages/shared` and the integration suites.
 
 ## CI
 
-`.github/workflows/ci.yml` runs, in order: install → format check → lint →
-typecheck → Prisma validate → migrate on a clean database → seed →
-`pnpm test:coverage` (unit + integration + component) → `pnpm build` → cache +
-install the Playwright Chromium build → `pnpm test:e2e`. On an E2E failure the
-Playwright HTML report is uploaded as an artifact. No step is allowed to fail
-silently — there is no `|| true`, no skipped suite, no masked exit code.
+`.github/workflows/ci.yml` has two jobs.
+
+**`validate`** runs, in order: install → format check → lint → typecheck →
+Prisma validate → migrate on a clean database → seed → `pnpm test:coverage`
+(unit + integration + component) → `pnpm build` → cache + install the
+Playwright Chromium build → `pnpm test:e2e`. On an E2E failure the Playwright
+HTML report is uploaded as an artifact.
+
+**`docker`** (Milestone 17) validates both Compose files, builds the three
+production images (`apps/api` runtime, `apps/api` migrator, `apps/web`), brings
+`docker-compose.prod.yml` up with `--wait`, then asserts: `/api/v1/health`
+returns `{"status":"ok"}`, the web container serves the SPA shell, the committed
+migrations landed in `_prisma_migrations` on the fresh database, and a second
+`migrator` run applies nothing. Stack logs are dumped on failure; the stack is
+always torn down with `down --volumes`.
+
+No step in either job is allowed to fail silently — there is no `|| true`, no
+skipped suite, no masked exit code, no `continue-on-error`.
+`apps/api/deploy.infra.test.ts` (a Vitest file, no Docker) guards the container
+configuration against regressions so a broken compose/Dockerfile is caught in
+`validate` too, not only in `docker`.
 
 ## Security & performance regression tests (Milestone 16)
 

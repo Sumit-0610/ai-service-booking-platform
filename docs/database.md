@@ -381,6 +381,20 @@ To evolve the schema during development:
 pnpm --filter @aisbp/database db:migrate   # prisma migrate dev
 ```
 
+### Container migration flow (Milestone 17)
+
+In `docker-compose.prod.yml` a one-shot `migrator` container (the `migrator`
+target of `apps/api/Dockerfile`) runs **`prisma migrate deploy`** — committed
+migrations only — against the Postgres service once it is healthy, then exits.
+The `api` container has `depends_on: { migrator: service_completed_successfully }`,
+so it never starts against an un-migrated schema. The production path **never**
+runs `prisma migrate reset`, `prisma migrate dev`, or `prisma db push`
+(`db:reset` is a developer-only convenience). Seeding is **not** part of the
+container startup — a fresh production database has schema but no rows until
+someone runs `db:seed` deliberately. The CI `docker` job verifies the migrator
+applied the committed migrations to a clean database and that a second run is a
+no-op.
+
 ## Seed
 
 ```bash
