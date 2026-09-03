@@ -157,21 +157,17 @@ jobs:
       - name: Stack state and logs on failure
         if: failure()
         run: |
-          mkdir -p /tmp/stacklogs
-          docker compose -f docker-compose.prod.yml ps --all | tee /tmp/stacklogs/ps.txt
+          mkdir -p stacklogs
+          docker compose -f docker-compose.prod.yml ps --all | tee stacklogs/ps.txt
           docker compose -f docker-compose.prod.yml logs --no-color --timestamps \
-            | tee /tmp/stacklogs/all.log
-          for svc in migrator api web postgres redis; do
-            docker compose -f docker-compose.prod.yml logs --no-color "$svc" \
-              > "/tmp/stacklogs/$svc.log" 2>&1 || true
-          done
+            | tee stacklogs/all.log
 
       - name: Upload stack logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: docker-stack-logs
-          path: /tmp/stacklogs/
+          path: stacklogs/
           retention-days: 7
 
       - name: Tear down
