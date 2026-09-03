@@ -9,8 +9,14 @@ import { z } from 'zod';
  * Ordering always carries an `id` tiebreaker so pages never overlap or skip.
  */
 
-/** Upper bound on `page` for every list endpoint (guards against silly offsets). */
-export const PAGE_MAX = 10_000;
+/**
+ * Upper bound on `page` for every list endpoint. Lowered from 10 000 to 1 000
+ * in the Milestone 16 review: `page=10000` on a large owner-unscoped list
+ * (the operations queue) forced an `OFFSET ~200 000` full sort — ~200 ms per
+ * request, measured — and no real client ever pages that deep. 1 000 pages is
+ * still far past any UI; deeper access should refine the filter.
+ */
+export const PAGE_MAX = 1_000;
 /** Default cap on `limit` when an endpoint does not set its own. */
 export const PAGE_SIZE_MAX = 100;
 export const PAGE_SIZE_DEFAULT = 20;

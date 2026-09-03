@@ -68,12 +68,17 @@ function isRecordNotFound(error: unknown): boolean {
 }
 
 export const availabilityRepository = {
-  /** Future, bookable slots for one service, within a bounded window. */
+  /**
+   * Future, bookable slots for one service, within a bounded window and capped
+   * at `take` rows (Milestone 16 — the row count also scales with the number of
+   * active technicians, so the window bound alone is not enough).
+   */
   listPublicForService(params: {
     serviceId: string;
     from: Date;
     to: Date;
     now: Date;
+    take: number;
   }): Promise<PublicSlotRow[]> {
     const lowerBound = params.from > params.now ? params.from : params.now;
     return prisma.availabilitySlot.findMany({
@@ -86,6 +91,7 @@ export const availabilityRepository = {
       },
       orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
       select: publicSlotSelect,
+      take: params.take,
     });
   },
 

@@ -244,6 +244,44 @@ describe('POST /api/v1/ai/booking-assistant/intent — grounding', () => {
     expect(res.body.error.code).toBe('SERVICE_UNAVAILABLE');
   });
 
+  // M16: the model cannot smuggle privileged fields into the intent — the shared
+  // schema has no status / technicianId / price / userId keys, so they are
+  // stripped before grounding and never reach any DTO or write path.
+  it('ignores privileged fields the model tries to add to the intent', async () => {
+    const user = await makeUser();
+    const addressId = await addAddress(user);
+    setClaudeClientForTesting(
+      scriptedClient({
+        structured: {
+          ...fullIntent({ addressId }),
+          status: 'confirmed',
+          technicianId: 'perf-tech-1',
+          priceCents: 1,
+          userId: 'someone-else',
+          bookingId: 'bk-1',
+        },
+      }),
+    );
+    const res = await postIntent(user, { message: 'book it now' });
+    expect(res.status).toBe(200);
+    const keys = Object.keys(res.body.intent).sort();
+    expect(keys).toEqual(
+      [
+        'addressId',
+        'clarificationQuestion',
+        'confidence',
+        'missingFields',
+        'notes',
+        'requestedDate',
+        'requestedTimeOfDay',
+        'serviceCandidateSlugs',
+        'serviceSlug',
+      ].sort(),
+    );
+    expect(JSON.stringify(res.body)).not.toContain('perf-tech-1');
+    expect(JSON.stringify(res.body)).not.toContain('someone-else');
+  });
+
   it('never creates a booking or address', async () => {
     const user = await makeUser();
     const addressId = await addAddress(user);

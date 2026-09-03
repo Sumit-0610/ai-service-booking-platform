@@ -7,6 +7,7 @@ import {
 import {
   AVAILABILITY_DEFAULT_WINDOW_DAYS,
   AVAILABILITY_MAX_WINDOW_DAYS,
+  AVAILABILITY_PUBLIC_MAX_SLOTS,
   checkSlotTimes,
   durationMinutes,
   type CreateSlotInput,
@@ -111,6 +112,7 @@ export const availabilityService = {
       from: window.from,
       to: window.to,
       now,
+      take: AVAILABILITY_PUBLIC_MAX_SLOTS,
     });
 
     return {

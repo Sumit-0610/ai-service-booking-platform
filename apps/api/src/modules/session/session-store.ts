@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import type { Role } from '@aisbp/shared';
+import { roleSchema, type Role } from '@aisbp/shared';
+import { z } from 'zod';
 import { env } from '../../config/env.js';
+import { logger } from '../../lib/logger.js';
 import { redis } from '../../lib/redis.js';
 
 /**
@@ -16,6 +18,19 @@ export interface SessionData {
   csrfToken: string;
   createdAt: string;
 }
+
+/**
+ * A stored session is validated on read (Milestone 16 hardening): `role` flows
+ * straight into `requireRole`, so a session blob whose `role` is not one of the
+ * three real roles — a poisoned or truncated Redis value — must be rejected as
+ * "no session" rather than trusted for authorization.
+ */
+const storedSessionSchema = z.object({
+  userId: z.string().min(1),
+  role: roleSchema,
+  csrfToken: z.string().min(1),
+  createdAt: z.string().min(1),
+});
 
 function randomToken(byteLength = 32): string {
   return randomBytes(byteLength).toString('base64url');
@@ -51,11 +66,18 @@ export const sessionStore = {
     if (!raw) {
       return null;
     }
+    let parsed: unknown;
     try {
-      return JSON.parse(raw) as SessionData;
+      parsed = JSON.parse(raw);
     } catch {
       return null;
     }
+    const result = storedSessionSchema.safeParse(parsed);
+    if (!result.success) {
+      logger.warn('rejected a malformed session blob', { sessionId: '[redacted]' });
+      return null;
+    }
+    return result.data;
   },
 
   /** Sliding expiration: extend the TTL on activity. */

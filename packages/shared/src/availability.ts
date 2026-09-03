@@ -13,7 +13,21 @@ import { z } from 'zod';
 export const AVAILABILITY_DEFAULT_WINDOW_DAYS = 14;
 export const AVAILABILITY_MAX_WINDOW_DAYS = 62;
 export const SLOT_MAX_HOURS = 12;
+/**
+ * Minimum slot length (Milestone 16). Without a floor a technician could create
+ * tens of thousands of 1-minute slots inside the 62-day window, and every
+ * anonymous `GET /services/:slug/availability` would then have to read and
+ * return all of them — a resource-exhaustion vector found in the M16 review.
+ */
+export const SLOT_MIN_MINUTES = 15;
 export const SLOT_MAX_ADVANCE_DAYS = 365;
+/**
+ * Hard cap on rows returned by the public availability endpoint (Milestone 16).
+ * The window is already bounded (≤ 62 days) but the row count also scales with
+ * the number of active technicians for a service; the UI groups slots by day
+ * and never needs more than this.
+ */
+export const AVAILABILITY_PUBLIC_MAX_SLOTS = 250;
 
 const MS_PER_MINUTE = 60_000;
 
@@ -81,6 +95,9 @@ export function checkSlotTimes(
 ): { field: 'startsAt' | 'endsAt'; message: string } | null {
   if (endsAt.getTime() <= startsAt.getTime()) {
     return { field: 'endsAt', message: 'The end time must be after the start time' };
+  }
+  if (endsAt.getTime() - startsAt.getTime() < SLOT_MIN_MINUTES * MS_PER_MINUTE) {
+    return { field: 'endsAt', message: `A slot must be at least ${SLOT_MIN_MINUTES} minutes long` };
   }
   if (endsAt.getTime() - startsAt.getTime() > SLOT_MAX_HOURS * 3_600_000) {
     return { field: 'endsAt', message: `A slot cannot be longer than ${SLOT_MAX_HOURS} hours` };

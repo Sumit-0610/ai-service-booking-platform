@@ -101,6 +101,67 @@ Availability queries are likely to be performance-sensitive. They should use ind
   or the local test environment (the tests inject a fake client). Measure
   against a real key before tuning the model or `max_tokens`.
 
+## Measured — Milestone 16
+
+Evidence-based review. Synthetic dataset loaded into the local PostgreSQL 14
+(`scratchpad/m16-perf*.sql`, cleaned up after): **30 000 bookings**, **20 000
+customers + addresses**, **60 technicians**, **37 000 availability slots**,
+**55 000 status-history rows**. `EXPLAIN (ANALYZE, BUFFERS)`, warm cache.
+
+| Path                                    | Query shape                                               | Plan                                                                               | Time         | Conclusion                                                                      |
+| --------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------- |
+| Public catalogue list                   | `Service` where `active`, `name` sort, `LIMIT 12`         | Seq Scan (13 rows) → sort                                                          | **0.16 ms**  | trivial; table is tiny by design                                                |
+| Pricing quote                           | `Service` where `slug = ? AND active`                     | Index Scan `Service_slug_key`                                                      | **0.08 ms**  | indexed point read                                                              |
+| Public availability (normal)            | slots for a service, 14-day window                        | Index Scan `AvailabilitySlot_status_startsAt_idx` + `Booking` anti-join (Seq Scan) | **~20 ms**   | dominated by the `booking IS NULL` anti-join over the bookings table            |
+| Public availability (slot flood)        | same, 12 500 available slots for one service              | Seq Scan slots + **nested-loop join, bad row estimate**                            | **88 ms**    | root cause: no minimum slot length → fixed by `SLOT_MIN_MINUTES` + `LIMIT 250`  |
+| Customer booking list                   | `customerId = ? [+ status]`, `createdAt` sort, `LIMIT 10` | Index Scan `Booking_customerId_createdAt_idx`                                      | **0.12 ms**  | one customer's rows are naturally bounded                                       |
+| Customer booking `count`                | same filter                                               | Index Scan `Booking_customerId_createdAt_idx`                                      | **0.07 ms**  | —                                                                               |
+| Technician jobs list                    | `technicianId = ? + status`, `scheduledStart` sort        | Incremental Sort on `Booking_technicianId_scheduledStart_idx`                      | **0.28 ms**  | —                                                                               |
+| Operations queue (status filter)        | `status = ?`, `createdAt` sort, `LIMIT 20`                | Bitmap Index Scan `Booking_status_idx` → top-N heapsort                            | **7.5 ms**   | acceptable; index-backed                                                        |
+| Operations queue (no filter)            | `createdAt` sort, `LIMIT 20`                              | Seq Scan (30k) → top-N heapsort                                                    | **31 ms**    | full scan; deferred `Booking(status, createdAt)` would help — not yet necessary |
+| Operations queue `count` (status)       | `status = ?`                                              | Bitmap Index Scan `Booking_status_idx`                                             | **3.6 ms**   | —                                                                               |
+| Deep pagination                         | operations queue, `OFFSET 199 980` (`page=10000`)         | Seq Scan + full quicksort of 30k rows                                              | **206 ms**   | fixed: `PAGE_MAX` lowered to 1 000                                              |
+| Dashboard `groupBy status`              | full-table group                                          | Seq Scan (30k) + HashAggregate                                                     | **26–31 ms** | full scan; unavoidable for an un-filtered group; deferred                       |
+| Dashboard total `count(*)`              | —                                                         | Seq Scan (30k)                                                                     | **11–15 ms** | deferred                                                                        |
+| Operations `q` search                   | `customer.name / email ILIKE '%…%'` (join)                | Hash Join + **Seq Scan `User` (20k)**                                              | **122 ms**   | operations-only; deferred `pg_trgm` GIN (M12 plan)                              |
+| Technician list `activeAssignmentCount` | `groupBy technicianId` over 20 ids                        | one `groupBy`, not per row                                                         | fast         | **no N+1**                                                                      |
+
+### N+1 / query-count audit
+
+Every list endpoint issues a fixed number of queries independent of row count:
+
+| Endpoint                                                     | Queries                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `GET /api/v1/services`                                       | 1 (`$transaction([findMany, count])`) + optional cache                    |
+| `GET /api/v1/bookings`, `GET /api/v1/technician/bookings`    | 2 (`findMany` + `count`)                                                  |
+| `GET /api/v1/operations/bookings`                            | 2                                                                         |
+| `GET /api/v1/operations/technicians`                         | 3 (`findMany` + `count` + one `groupBy` for all rows' assignment counts)  |
+| `GET /api/v1/operations/bookings/:id/assignable-technicians` | 3 (booking + technicians + one batched `IN` overlap query)                |
+| `GET /api/v1/operations/dashboard`                           | 7 parallel aggregations, never a row load                                 |
+| AI `intent` / `clarify` context                              | ≤ 2 (`Promise.all` of the cached catalogue list + `addresses.listByUser`) |
+
+Related data (`service`, `customer`, `technician`, `address`, `statusHistory`)
+is always fetched with a nested `select` (one join), never per row. **No N+1
+was found.** Query-count assertions are not added to the suite — the Prisma
+client is not instrumented for query events, and the counts above are visible
+in the repository code and confirmed by the plans; the bounded-pagination and
+availability-cap behaviours _are_ covered by regression tests.
+
+### Fixes and their effect
+
+| Fix                                             | Before                                                                                     | After                                                                                                                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SLOT_MIN_MINUTES = 15`                         | a technician can create ~89 000 1-minute slots in 62 days                                  | ~4/hour ceiling — realistic technicians have tens of slots                                                                                                                    |
+| `AVAILABILITY_PUBLIC_MAX_SLOTS = 250` (`LIMIT`) | availability response and sort scale with total slot count (88 ms / 12.5k rows at a flood) | sort is a bounded top-N heapsort, payload ≤ 250 rows (75 ms at the same flood; the join is still O(matching slots), bounded by the slot floor at realistic technician counts) |
+| `PAGE_MAX` 10 000 → 1 000                       | `page=10000` → 206 ms full sort                                                            | `page` beyond 1 000 → `422`; no realistic UI is affected                                                                                                                      |
+
+### Frontend bundle
+
+Production build (`pnpm build`): `dist/assets/index-*.js` ≈ **460 kB** raw /
+**132 kB** gzip, one chunk; `index-*.css` ≈ 25 kB / 5.8 kB gzip. Acceptable for
+an MVP SPA; route-level code splitting is a documented future improvement, not
+an M16 fix.
+
 ## Measurement Plan
 
 As implementation matures, collect:

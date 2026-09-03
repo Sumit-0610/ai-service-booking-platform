@@ -228,12 +228,25 @@ describe('GET /api/v1/operations/bookings', () => {
   });
 
   it('rejects invalid query parameters with 422', async () => {
-    for (const q of ['?limit=101', '?limit=0', '?page=0', '?status=nonsense', '?page=abc']) {
+    // `?page=1001` — M16 lowered PAGE_MAX to 1000 (deep offsets forced full sorts).
+    for (const q of [
+      '?limit=101',
+      '?limit=0',
+      '?page=0',
+      '?status=nonsense',
+      '?page=abc',
+      '?page=1001',
+    ]) {
       const res = await agent()
         .get(`/api/v1/operations/bookings${q}`)
         .set('Cookie', opsCookies.header);
       expect(res.status, q).toBe(422);
     }
+    // `?page=1000` is still accepted (empty page, not an error).
+    const atMax = await agent()
+      .get('/api/v1/operations/bookings?page=1000')
+      .set('Cookie', opsCookies.header);
+    expect(atMax.status).toBe(200);
   });
 
   it('orders deterministically and paginates without overlap', async () => {

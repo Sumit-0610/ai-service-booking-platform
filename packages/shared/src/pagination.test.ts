@@ -20,7 +20,9 @@ describe('pageParams', () => {
     ]) {
       expect(schema.safeParse(q).success, JSON.stringify(q)).toBe(false);
     }
-    expect(schema.safeParse({ page: '10001' }).success).toBe(false);
+    // M16: PAGE_MAX lowered to 1000 (deep offsets forced full sorts — measured).
+    expect(schema.safeParse({ page: '1000' }).success).toBe(true);
+    expect(schema.safeParse({ page: '1001' }).success).toBe(false);
   });
 });
 

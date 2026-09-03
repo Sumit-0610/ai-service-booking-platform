@@ -209,6 +209,43 @@ install the Playwright Chromium build → `pnpm test:e2e`. On an E2E failure the
 Playwright HTML report is uploaded as an artifact. No step is allowed to fail
 silently — there is no `|| true`, no skipped suite, no masked exit code.
 
+## Security & performance regression tests (Milestone 16)
+
+The M16 review confirmed the existing suite already covers the attack-scenario
+checklist — unauthenticated access, wrong-role access, customer & technician
+IDOR (`404`, non-enumerating), malformed `:id` (`422`), mass assignment
+(`.strict()` → `422`), arbitrary Prisma-filter injection
+(`?where[id]=…&select=password` returns the caller's own page), CSRF (missing
+**and** wrong token), price tampering, invalid booking transitions, technician
+qualification bypass, technician assignment conflicts under concurrency, AI
+mutation / authorization bypass, and sensitive-DTO leakage (serialised-response
+string assertions).
+
+New regression tests added for the M16 fixes:
+
+- `packages/shared/src/availability.test.ts` — `checkSlotTimes` rejects a
+  sub-`SLOT_MIN_MINUTES` slot; `AVAILABILITY_PUBLIC_MAX_SLOTS` is bounded.
+- `packages/shared/src/pagination.test.ts` — `page=1000` accepted, `page=1001`
+  rejected (`PAGE_MAX` lowered).
+- `apps/api/.../availability.integration.test.ts` — a 10-minute slot → `422`;
+  the public availability response is capped at `AVAILABILITY_PUBLIC_MAX_SLOTS`
+  even when more slots exist.
+- `apps/api/.../operations.integration.test.ts` — `?page=1001` → `422`,
+  `?page=1000` → `200`.
+- `apps/api/.../auth.integration.test.ts` — a poisoned Redis session blob with
+  an unknown `role` → `401` (no privilege escalation); a same-length-but-wrong
+  CSRF token → `403` (constant-time compare must not throw).
+- `apps/api/.../ai.integration.test.ts` — the model cannot add `status` /
+  `technicianId` / `price` / `userId` to the intent (Zod strips them; they
+  never reach a DTO).
+
+Performance is measured out-of-band (`scratchpad/m16-perf*.sql`,
+`EXPLAIN (ANALYZE, BUFFERS)` on synthetic data) and recorded in
+[Performance](performance.md#measured--milestone-16) — not asserted with
+wall-clock thresholds in CI. Query counts per list endpoint are documented
+there and confirmed by reading the repository code; the Prisma client is not
+instrumented for query-event counting.
+
 ## Non-goals
 
 No tests asserting exact pixel layout. Prefer behaviour, accessibility roles,

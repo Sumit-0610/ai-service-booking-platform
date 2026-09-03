@@ -1,4 +1,5 @@
 import { prisma } from '@aisbp/database/testing';
+import { AVAILABILITY_PUBLIC_MAX_SLOTS } from '@aisbp/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   agent,
@@ -187,6 +188,29 @@ describe('GET /api/v1/services/:slug/availability (public)', () => {
     const res = await agent().get(`/api/v1/services/${ACTIVE_SLUG}/availability?from=next-week`);
     expect(res.status).toBe(422);
   });
+
+  // M16: the public response is capped regardless of how many slots exist.
+  it('caps the public response at AVAILABILITY_PUBLIC_MAX_SLOTS', async () => {
+    const tech = await makeTechnician('cap');
+    const base = new Date();
+    base.setUTCDate(base.getUTCDate() + 2);
+    base.setUTCHours(0, 0, 0, 0);
+    const overCap = AVAILABILITY_PUBLIC_MAX_SLOTS + 10;
+    await prisma.availabilitySlot.createMany({
+      data: Array.from({ length: overCap }, (_, i) => ({
+        technicianId: tech.technicianId,
+        serviceId: activeServiceId,
+        startsAt: new Date(base.getTime() + i * 30 * 60_000),
+        endsAt: new Date(base.getTime() + i * 30 * 60_000 + 15 * 60_000),
+      })),
+    });
+
+    const res = await agent().get(
+      `/api/v1/services/${ACTIVE_SLUG}/availability?from=${base.toISOString()}&to=${new Date(base.getTime() + 60 * 86_400_000).toISOString()}`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.items.length).toBe(AVAILABILITY_PUBLIC_MAX_SLOTS);
+  });
 });
 
 describe('technician availability management', () => {
@@ -228,6 +252,17 @@ describe('technician availability management', () => {
 
     const after = await agent().get('/api/v1/technician/availability').set('Cookie', tech.header);
     expect(after.body.items.map((s: { id: string }) => s.id)).not.toContain(id);
+  });
+
+  it('rejects a slot shorter than the minimum length with 422 (M16)', async () => {
+    const tech = await makeTechnician('tiny');
+    const res = await createSlot(tech, {
+      serviceSlug: ACTIVE_SLUG,
+      startsAt: inDays(6, 9, 0),
+      endsAt: inDays(6, 9, 10), // 10 minutes
+    });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it("never lets a technician touch another technician's slot (404, not 403)", async () => {

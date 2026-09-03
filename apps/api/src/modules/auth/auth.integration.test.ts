@@ -11,6 +11,7 @@ import {
   VALID_PASSWORD,
 } from '../../test/helpers.js';
 import { env } from '../../config/env.js';
+import { redis } from '../../lib/redis.js';
 
 /**
  * Integration tests for the auth endpoints. Require a migrated PostgreSQL and a
@@ -154,6 +155,30 @@ describe('GET /api/v1/auth/me', () => {
       .set('Cookie', `${env.SESSION_COOKIE_NAME}=totally-made-up-session-id`);
     expect(res.status).toBe(401);
   });
+
+  // M16 hardening: the stored session is validated on read, so a poisoned Redis
+  // blob cannot escalate a role. `req.user.role` flows straight into requireRole.
+  it('rejects a session whose stored role is not a real role (no privilege escalation)', async () => {
+    const { email } = await registerUser();
+    const cookies = await loginUser(email);
+    const sessionId = cookies.raw[env.SESSION_COOKIE_NAME];
+    expect(sessionId).toBeTruthy();
+
+    // Overwrite the stored blob with an invalid role.
+    const raw = await redis.get(`sess:${sessionId}`);
+    const poisoned = { ...JSON.parse(raw as string), role: 'superadmin' };
+    await redis.set(`sess:${sessionId}`, JSON.stringify(poisoned));
+
+    const res = await agent().get('/api/v1/auth/me').set('Cookie', cookies.header);
+    expect(res.status).toBe(401);
+
+    // And it cannot reach an operations route either.
+    const ops = await agent()
+      .get('/api/v1/operations/dashboard')
+      .set('Cookie', cookies.header)
+      .set('X-Forwarded-For', freshIp());
+    expect(ops.status).toBe(401);
+  });
 });
 
 describe('POST /api/v1/auth/logout', () => {
@@ -172,6 +197,16 @@ describe('POST /api/v1/auth/logout', () => {
       .set('Cookie', cookies.header)
       .set('X-CSRF-Token', 'not-the-real-token');
     expect(badCsrf.status).toBe(403);
+
+    // A same-length but incorrect token is also rejected (constant-time compare,
+    // M16 hardening — must not throw on the length check either).
+    const sameLenWrong = 'A'.repeat(cookies.csrfToken.length);
+    const badCsrf2 = await agent()
+      .post('/api/v1/auth/logout')
+      .set('Cookie', cookies.header)
+      .set('X-CSRF-Token', sameLenWrong);
+    expect(badCsrf2.status).toBe(403);
+    expect(badCsrf2.body.error.code).toBe('CSRF_ERROR');
 
     // Correct CSRF header -> succeeds.
     const ok = await agent()

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AVAILABILITY_PUBLIC_MAX_SLOTS,
   SLOT_MAX_ADVANCE_DAYS,
   SLOT_MAX_HOURS,
+  SLOT_MIN_MINUTES,
   checkSlotTimes,
   createSlotSchema,
   durationMinutes,
@@ -28,6 +30,16 @@ describe('checkSlotTimes', () => {
     expect(checkSlotTimes(at(24), at(24 + SLOT_MAX_HOURS), NOW)).toBeNull(); // exactly at the limit
   });
 
+  // M16 hardening: a slot floor stops a technician flooding the calendar with
+  // thousands of tiny slots (which every public availability read would return).
+  it(`rejects a slot shorter than ${SLOT_MIN_MINUTES} minutes`, () => {
+    const startMs = 24 * 3_600_000;
+    const belowMin = new Date(NOW + startMs + (SLOT_MIN_MINUTES - 1) * 60_000);
+    expect(checkSlotTimes(at(24), belowMin, NOW)?.field).toBe('endsAt');
+    const exactlyMin = new Date(NOW + startMs + SLOT_MIN_MINUTES * 60_000);
+    expect(checkSlotTimes(at(24), exactlyMin, NOW)).toBeNull(); // exactly at the floor
+  });
+
   it('rejects a start in the past or exactly now', () => {
     expect(checkSlotTimes(at(-1), at(1), NOW)?.field).toBe('startsAt');
     expect(checkSlotTimes(new Date(NOW), at(1), NOW)?.field).toBe('startsAt');
@@ -36,6 +48,14 @@ describe('checkSlotTimes', () => {
   it(`rejects a start more than ${SLOT_MAX_ADVANCE_DAYS} days ahead`, () => {
     const tooFar = SLOT_MAX_ADVANCE_DAYS * 24 + 1;
     expect(checkSlotTimes(at(tooFar), at(tooFar + 1), NOW)?.field).toBe('startsAt');
+  });
+});
+
+describe('constants', () => {
+  it('bounds the public availability response and the slot floor', () => {
+    expect(AVAILABILITY_PUBLIC_MAX_SLOTS).toBeGreaterThan(0);
+    expect(AVAILABILITY_PUBLIC_MAX_SLOTS).toBeLessThanOrEqual(1000);
+    expect(SLOT_MIN_MINUTES).toBeGreaterThanOrEqual(5);
   });
 });
 

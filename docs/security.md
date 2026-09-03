@@ -164,7 +164,7 @@
   concurrent update -> `409`. Exactly one `BookingStatusHistory` row per applied
   change.
 - **Arbitrary Prisma filtering / pagination abuse**: query params are Zod-parsed
-  into an allow-list; `page`/`limit` are bounded (`limit` ≤ 100, `page` ≤ 10000)
+  into an allow-list; `page`/`limit` are bounded (`limit` ≤ 100, `page` ≤ 1000)
   and out-of-range values are rejected, not clamped. `q` is a bounded
   case-insensitive substring, never a raw expression.
 - **Sensitive data exposure**: the list DTO omits customer email, address, and
@@ -219,7 +219,7 @@
 
 - Every list endpoint's `page` / `limit` / `sort` / filter params are parsed
   through a shared Zod contract. `page` and `limit` are bounded server-side
-  (`limit` ≤ 50–100 per endpoint, `page` ≤ 10000); an out-of-range value is
+  (`limit` ≤ 50–100 per endpoint, `page` ≤ 1000); an out-of-range value is
   `422`, never silently clamped. `sort` and status filters are closed enums —
   an unknown value is `422`.
 - Unknown query keys are ignored; no client-supplied `where`, `select`,
@@ -299,6 +299,62 @@
 - **Observability without leakage**: `ai.call` / `ai.validation` / `ai.error`
   log lines carry operation, model, latency, token counts, and outcome only —
   never prompt text, completion text, or personal data.
+
+## Security & Performance Review (Milestone 16)
+
+A full pass over `route → middleware → controller → service → repository →
+database`, the AI flow, the M13 cache, and the frontend.
+
+### Verified controls — no change needed
+
+| Area                 | What was checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Result                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Authentication       | protected routers all start `requireAuth`; a forged / unknown session id → `401`; unknown-email and wrong-password give the same generic `401` with an equalising Argon2id verify; the session id and CSRF token live only in cookies (`HttpOnly` for the session)                                                                                                                                                                                                                                                                              | pass                                   |
+| Authorization        | every owner-scoped repository query carries `where: { id, customerId }` / `{ id, technicianId }`; cross-owner access is a non-enumerating `404`; operations' table-wide reads have no client-supplied owner id / filter; role is taken from the session, never the body                                                                                                                                                                                                                                                                         | pass                                   |
+| IDOR                 | customer → another customer's address / booking / status-history → `404`; technician → another technician's job / profile → `404`; `:id` params are `^[A-Za-z0-9-]{8,64}$`-validated before any query                                                                                                                                                                                                                                                                                                                                           | pass (covered by tests)                |
+| CSRF                 | every `POST` / `PATCH` / `DELETE` across addresses, availability, bookings, operations status, technician management / qualifications / assignment, technician job status, and the AI assistant runs `requireCsrf`; `GET` is unaffected; single-origin CORS with credentials                                                                                                                                                                                                                                                                    | pass                                   |
+| Mass assignment      | request bodies are `.strict()` Zod objects — `status`, `technicianId`, `customerId`, `serviceId`, `slotId`, `userId`, every `price*` field, `changedByUserId` are rejected with `422`                                                                                                                                                                                                                                                                                                                                                           | pass                                   |
+| Arbitrary Prisma     | no `$queryRawUnsafe` / `$executeRawUnsafe` anywhere; the four `$queryRaw` sites are parameterised `SELECT … FOR UPDATE` locks; no client value ever reaches a Prisma `where` / `select` / `orderBy` / field name (sort and filter are closed enums; `q` is a bounded `contains`)                                                                                                                                                                                                                                                                | pass                                   |
+| Data exposure        | every response is an explicit narrow `select`; no password hash, session data, `changedByUserId`, raw foreign key, or role-inappropriate field in any DTO (public catalogue / availability, customer booking, operations list & detail, technician list & detail & profile)                                                                                                                                                                                                                                                                     | pass (leak-string assertions in tests) |
+| Booking integrity    | creation revalidates address ownership, slot availability, service active, technician active, and future-dated **inside the transaction**; the price snapshot is computed server-side in the same transaction; the initial `BookingStatusHistory` row is atomic; `Booking.slotId` UNIQUE is the double-booking authority (concurrent creates → exactly one, tested); status transitions use a conditional `updateMany` (concurrent change → `409`); assignment takes a `FOR UPDATE` lock on the technician and never touches the price snapshot | pass                                   |
+| Database constraints | FKs (`RESTRICT` on booking→address/service/customer/slot, `SET NULL` on booking→technician, `CASCADE` on history→booking), `Booking.slotId` / `Technician.userId` / `TechnicianService(technicianId,serviceId)` / `AvailabilitySlot(technicianId,serviceId,startsAt)` UNIQUE, GiST slot-overlap `EXCLUDE`, positive-time and price CHECKs — all present; a referenced address / slot cannot be deleted (`409`)                                                                                                                                  | pass                                   |
+| AI assistant         | user text is a bounded `.strict()` body; Claude output is `safeParse`d, and every field re-grounded server-side (invented service / foreign `addressId` / past date all dropped); the intent schema has no `status` / `technicianId` / `price` / `userId` keys, and Zod strips any the model adds; the assistant never calls a repository to mutate; a Claude error is a safe clarification (`200`), never a bypass; `503` when unconfigured                                                                                                    | pass (M14 + M16 tests)                 |
+| Cache                | keyed `cache:catalogue:v1:…` — public catalogue only, no identity in the key; nothing authenticated is cached; a Redis failure is logged and falls through to PostgreSQL; TTL bounded (120 s)                                                                                                                                                                                                                                                                                                                                                   | pass                                   |
+| Error handling       | expected errors → documented codes; unmapped errors (incl. unexpected Prisma errors) → generic `500` + a server-side log with method / path / message only; no stack trace, DB error, or provider error reaches a client                                                                                                                                                                                                                                                                                                                        | pass                                   |
+| Frontend             | `ProtectedRoute` is UX-only and every sensitive operation is API-enforced; the UI renders only server-sanitised `ApiError.message` or its own generic fallback — no stack traces, DB errors, internal ids, or unnecessary emails                                                                                                                                                                                                                                                                                                                | pass                                   |
+
+### Fixes applied (all with regression tests)
+
+| Fix                    | Finding                                                                                                                                                                                                            | Change                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Slot floor             | no minimum slot length → a technician could create tens of thousands of sub-minute slots; every anonymous `GET /services/:slug/availability` then returned all of them (**88 ms** at a 12.5k-slot flood, measured) | `SLOT_MIN_MINUTES = 15` in `checkSlotTimes` — `422` on a shorter slot                                       |
+| Unbounded availability | the public availability query had no `LIMIT`                                                                                                                                                                       | `AVAILABILITY_PUBLIC_MAX_SLOTS = 250` `take` — bounds the sort and the response payload                     |
+| Deep pagination        | `page=10000` on the operations queue → `OFFSET ~200 000` → full sort, **~200 ms** measured                                                                                                                         | `PAGE_MAX` lowered `10_000 → 1_000` (still far past any UI); `422` beyond                                   |
+| CSRF compare           | `!==` on the synchroniser token is not constant-time                                                                                                                                                               | `crypto.timingSafeEqual` (with a length guard)                                                              |
+| Session trust          | `JSON.parse(raw) as SessionData` — `role` flows straight into `requireRole`                                                                                                                                        | the stored blob is `safeParse`d against a schema on read; an unknown `role` → treated as no session (`401`) |
+
+### Accepted MVP tradeoffs (documented, not fixed)
+
+- **Operations `q` search** does `name / email ILIKE '%…%'` across a join — a
+  full `User` scan (**122 ms** at 20 000 users, measured). Operations-only, few
+  trusted users, small user table for this domain. Scale-up: `pg_trgm` + GIN
+  indexes (already the M12-deferred plan). Trigger: user table > ~50 000 rows
+  or measured operations-search p95 above ~250 ms.
+- **Dashboard aggregates** (`count(*)`, `groupBy status`) are full scans
+  (**11–31 ms** at 30 000 bookings). Trigger: bookings table > ~hundreds of
+  thousands of rows, then the M12-deferred `Booking(status, createdAt)`
+  composite.
+- **Rate limiter fails closed on a Redis outage** — `redis.incr` throwing
+  surfaces as a `500` on login / register / AI. Acceptable: these are
+  auth-adjacent and failing closed is the safe direction.
+- **Redis is trusted for session content** beyond the shape check — if an
+  attacker can write arbitrary `sess:` keys they can forge a _valid-shape_
+  session for an existing user id. Mitigating this needs signed session blobs,
+  out of MVP scope.
+- **`booking: { is: null }` in the public availability query is redundant** with
+  `status = 'available'` (M9 flips the slot to `booked`; `slotId` is UNIQUE;
+  cancel does not revert). It is kept as defence-in-depth; dropping it would
+  remove one hash-join (~5 ms) — an optional future simplification.
 
 ## API Validation
 

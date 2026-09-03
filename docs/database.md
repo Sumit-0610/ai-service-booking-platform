@@ -316,6 +316,30 @@ scheduledStart)`. Status history is `where { bookingId } order by createdAt` →
   `catalogueService.invalidate()` and consider precise pricing invalidation
   before caching `GET /api/v1/services/:slug/price`.
 
+### Performance review (Milestone 16)
+
+**No schema migration, no index added, no constraint changed.** Query plans
+were measured against a synthetic dataset (30 000 bookings, 20 000 users,
+37 000 slots) — full table in
+[Performance](performance.md#measured--milestone-16). Every list query is
+served by an existing index or is a bounded top-N / aggregate scan. Two hot
+paths are documented deferrals with measured triggers:
+
+- **`Booking(status, createdAt)` composite** (the M12 deferral) — would turn the
+  unfiltered operations queue (Seq Scan → top-N, 31 ms at 30k rows) and the
+  status-filtered queue into pure index scans. Trigger: bookings table beyond
+  a few hundred thousand rows.
+- **`pg_trgm` GIN on `User.name` / `User.email` / `Service.name`** (the M12
+  deferral) — the operations `q` search is a full `User` scan (122 ms at 20k
+  users). Operations-only; trigger: user table beyond ~50 000 rows.
+
+Two validation floors were added at the Zod boundary (not as DB CHECKs, to
+match how `SLOT_MAX_HOURS` is already enforced): `SLOT_MIN_MINUTES = 15` (stops
+a technician flooding the calendar with tiny slots) and
+`AVAILABILITY_PUBLIC_MAX_SLOTS = 250` (a `take` on the public availability read).
+`PAGE_MAX` was lowered from 10 000 to 1 000 so `page` can no longer force a
+~200 ms deep-offset sort.
+
 ## Pricing snapshot
 
 `Service.basePriceCents` is the _current_ list price. When a booking is created

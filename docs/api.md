@@ -30,7 +30,7 @@ Every collection endpoint shares one contract, backed by
 
 | Aspect       | Rule                                                                                                                                                                                 |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `page`       | integer ≥ 1, ≤ 10000; out of range → `422` (never clamped)                                                                                                                           |
+| `page`       | integer ≥ 1, ≤ 1000; out of range → `422` (never clamped)                                                                                                                            |
 | `limit`      | integer ≥ 1, per-endpoint cap (catalogue 48, operations 100, customer & technician lists 50); out of range → `422`                                                                   |
 | `sort`       | a closed `enum`; an unknown value → `422`. Every ordering ends with an `id` tiebreaker, so pages never overlap or skip rows and repeating a request returns the same order           |
 | filters      | a fixed allow-list per endpoint; an unknown status/filter value → `422`; unknown query keys are ignored; **no** client `where` / `select` / `orderBy` / field name reaches Prisma    |
@@ -83,7 +83,7 @@ GET /api/v1/services/:slug        -> 200 { service: Service }  | 404
 | `q`        | string, 1–100 chars                                                  | —          | Case-insensitive substring match on service name **or** description. Empty/blank is treated as absent. |
 | `category` | string (category slug)                                               | —          | Filter to one active category. An unknown slug returns an empty page, not an error.                    |
 | `sort`     | `name_asc` \| `name_desc` \| `price_asc` \| `price_desc` \| `newest` | `name_asc` | Every ordering has a stable `id` tiebreaker, so pagination is deterministic.                           |
-| `page`     | integer ≥ 1 (≤ 10000)                                                | `1`        |                                                                                                        |
+| `page`     | integer ≥ 1 (≤ 1000)                                                 | `1`        |                                                                                                        |
 | `limit`    | integer 1–48                                                         | `12`       | Values outside the range are rejected with `422`, never clamped.                                       |
 
 Unknown query parameters are ignored. The server builds the Prisma `where`
@@ -269,6 +269,9 @@ GET /api/v1/services/:slug/availability?from=<iso>&to=<iso>
 - `Slot` = `{ id, startsAt, endsAt, durationMinutes }` — no technician, no
   service id, no status, no internal fields.
 - Ordered by `startsAt` then `id` (deterministic).
+- Capped at **250 slots** (`AVAILABILITY_PUBLIC_MAX_SLOTS`, Milestone 16) — the
+  window bound alone does not cap the row count, which also scales with the
+  number of active technicians.
 
 ### Technician availability (technician)
 
@@ -289,7 +292,8 @@ DELETE /api/v1/technician/availability/:id      -> 204 | 404 | 409     (X-CSRF-T
   non-empty). `.strict()` — **`technicianId`, `userId`, `status`, `bookingId` and
   any other key are rejected with `422`.** The authenticated technician always
   owns the slot.
-- Rules: `endsAt > startsAt`; duration ≤ 12 h; `startsAt` in the future and
+- Rules: `endsAt > startsAt`; duration between **15 min** (`SLOT_MIN_MINUTES`,
+  Milestone 16) and **12 h**; `startsAt` in the future and
   within 365 days; the service must exist and be **active** (else `422` on
   `serviceSlug`). A booked slot cannot be edited or deleted (`409`).
 - **Ownership**: every query, update and delete carries `where: { id, technicianId }`.
@@ -393,7 +397,7 @@ POST /api/v1/bookings/:id/cancel            -> 200 { booking } | 404 | 409  (X-C
 
 `GET /api/v1/bookings` query params (Milestone 12): `status` (one of the 7
 booking statuses), `sort` (`created_desc` \| `created_asc` \| `scheduled_asc` \|
-`scheduled_desc`, default `created_desc`), `page` (≥ 1, ≤ 10000), `limit` (1–50,
+`scheduled_desc`, default `created_desc`), `page` (≥ 1, ≤ 1000), `limit` (1–50,
 default 10). See [List conventions](#list-conventions-milestone-12).
 
 `Booking` (customer DTO — no user ids, no raw model):
@@ -515,7 +519,7 @@ PATCH /api/v1/operations/bookings/:id/status    -> 200 { booking } | 404 | 409  
 | `q`           | string, 1–100 chars                                                    | —              | case-insensitive substring of customer name / email or service name |
 | `from` / `to` | ISO-8601 with offset                                                   | —              | `scheduledStart` half-open range `[from, to)`; malformed → `422`    |
 | `sort`        | `created_desc` \| `created_asc` \| `scheduled_asc` \| `scheduled_desc` | `created_desc` | every ordering has a stable `id` tiebreaker                         |
-| `page`        | integer ≥ 1 (≤ 10000)                                                  | `1`            |                                                                     |
+| `page`        | integer ≥ 1 (≤ 1000)                                                   | `1`            |                                                                     |
 | `limit`       | integer 1–100                                                          | `20`           | out-of-range → `422`, never clamped                                 |
 
 Unknown parameters are ignored; the server builds the Prisma `where` from this
@@ -597,7 +601,7 @@ POST   /api/v1/operations/bookings/:id/assign-technician      -> 200 { booking }
 
 - **Technician list** — query `active` (bool), `q` (name / email substring),
   `sort` (`name_asc` \| `name_desc`, default `name_asc` — Milestone 12),
-  `page` (≤ 10000), `limit` (1–100, default 20). `TechnicianSummary` =
+  `page` (≤ 1000), `limit` (1–100, default 20). `TechnicianSummary` =
   `{ id, displayName, serviceArea, active, name, email, qualifiedServiceCount,
 activeAssignmentCount }`. No password hash, no user internals. Detail adds
   `qualifications: [{ serviceId, slug, name, active }]`.

@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 16: Security and performance review — not started.**
+**Milestone 17: Docker and CI/CD — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–15 are complete with CI green on `origin/main`.
+Milestones 1–16 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -232,10 +232,42 @@ not gated. CI gained a coverage-reporting test step plus Playwright browser
 cache + E2E steps. New dev dependencies: `@playwright/test`,
 `@vitest/coverage-v8`. No schema change, no production behaviour change.
 
-### M16: Security and performance review
+### M16: Security and performance review — complete
 
-Security review of auth, authorization, and AI boundaries; performance
-measurement of core endpoints and the frontend bundle.
+Systematic review of the full request path (route → middleware → controller →
+service → repository → database), the AI flow, the M13 cache, and the frontend.
+
+**Verified controls (no change needed):** owner-scoped repository `where`
+clauses (customer / technician IDOR), role gates on every protected router,
+`.strict()` bodies + Zod-validated `:id` params + closed sort/filter enums (no
+client-supplied Prisma `where` / `select` / `orderBy`), server-only price
+snapshots, the `Booking.slotId` UNIQUE / GiST slot-overlap / price-consistency
+constraints, explicit narrow DTO selects (no password hash, session, or raw FK
+leakage), the AI grounding layer (invented service / foreign address / past
+date all dropped; no mutation; no privileged fields), the cache (public
+catalogue only, keyed without identity, fails through to PostgreSQL), and the
+error handler (generic 500 + server log for anything unmapped — no stack traces
+or Prisma messages reach clients).
+
+**Fixes (all with regression tests):**
+
+- **`SLOT_MIN_MINUTES = 15`** — a technician could create tens of thousands of
+  sub-minute slots inside the 62-day window; every anonymous availability read
+  then had to return them all (measured 88 ms at a 12.5k-slot flood).
+- **`AVAILABILITY_PUBLIC_MAX_SLOTS = 250`** — the public availability query had
+  no `LIMIT`; now capped (bounds the sort and the payload).
+- **`PAGE_MAX` 10 000 → 1 000** — `page=10000` on the operations queue forced an
+  `OFFSET ~200 000` full sort (~200 ms measured); no client pages that deep.
+- **Constant-time CSRF token comparison** (`crypto.timingSafeEqual`).
+- **Stored sessions are Zod-validated on read** — a poisoned Redis blob with an
+  unknown `role` is rejected rather than trusted for authorization.
+
+No schema migration, no new dependency, no index added. Query plans measured on
+30 000 bookings / 20 000 users — see
+[Performance](performance.md#measured--milestone-16). Accepted MVP tradeoffs and
+scale-up triggers are documented in
+[Security](security.md#security--performance-review-milestone-16) and
+[Database](database.md#performance-review-milestone-16).
 
 ### M17: Docker and CI/CD
 
