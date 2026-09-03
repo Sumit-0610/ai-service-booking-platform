@@ -122,11 +122,13 @@ jobs:
       - name: Build production images
         run: docker compose -f docker-compose.prod.yml build
 
+      - name: Apply migrations (one-shot migrator; fails loudly here if broken)
+        run: docker compose -f docker-compose.prod.yml run --rm migrator
+
       - name: Start the stack and wait for health
-        # Bringing up `api` + `web` pulls in postgres, redis, and the one-shot
-        # migrator via `depends_on`; `--wait` tracks the two long-running
-        # services' health checks.
-        run: docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 240 api web
+        # `api` + `web` pull in postgres, redis, and (idempotently) the migrator
+        # via `depends_on`; `--wait` tracks the two long-running health checks.
+        run: docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 180 api web
 
       - name: API /api/v1/health responds ok
         run: |
@@ -155,8 +157,22 @@ jobs:
       - name: Stack state and logs on failure
         if: failure()
         run: |
-          docker compose -f docker-compose.prod.yml ps --all
-          docker compose -f docker-compose.prod.yml logs --no-color --tail 200
+          mkdir -p /tmp/stacklogs
+          docker compose -f docker-compose.prod.yml ps --all | tee /tmp/stacklogs/ps.txt
+          docker compose -f docker-compose.prod.yml logs --no-color --timestamps \
+            | tee /tmp/stacklogs/all.log
+          for svc in migrator api web postgres redis; do
+            docker compose -f docker-compose.prod.yml logs --no-color "$svc" \
+              > "/tmp/stacklogs/$svc.log" 2>&1 || true
+          done
+
+      - name: Upload stack logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-stack-logs
+          path: /tmp/stacklogs/
+          retention-days: 7
 
       - name: Tear down
         if: always()
