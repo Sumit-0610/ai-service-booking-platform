@@ -381,6 +381,15 @@ To evolve the schema during development:
 pnpm --filter @aisbp/database db:migrate   # prisma migrate dev
 ```
 
+### Prisma engine targets (Milestone 17)
+
+The `generator client` block gained
+`binaryTargets = ["native", "linux-musl-openssl-3.0.x"]` so the generated client
+carries the musl OpenSSL 3 query engine used inside the Alpine production image
+as well as the local/CI (glibc) `native` engine. This is a **client-generation
+config only** — `prisma migrate diff` reports no difference, there is no new
+migration, and the data model is unchanged.
+
 ### Container migration flow (Milestone 17)
 
 In `docker-compose.prod.yml` a one-shot `migrator` container (the `migrator`

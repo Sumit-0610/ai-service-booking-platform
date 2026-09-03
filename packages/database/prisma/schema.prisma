@@ -6,8 +6,11 @@
 // bookings never change when a Service is repriced.
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
+  // `native` covers local dev and CI (glibc); the musl target is generated so
+  // the same client works inside the Alpine production image (Milestone 17).
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

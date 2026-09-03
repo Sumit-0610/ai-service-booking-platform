@@ -3,22 +3,23 @@
 # Production image for @aisbp/api. Build context = repository root.
 #   docker build -f apps/api/Dockerfile -t aisbp-api .
 #
-# Multi-stage: a full workspace install builds @aisbp/shared + @aisbp/database +
-# the API with tsc; a second install prunes to production dependencies; the
-# runtime stage copies only the built JS, the generated Prisma client, and the
-# pruned node_modules onto a minimal Alpine base and runs as a non-root user.
-# The `migrator` target keeps the Prisma CLI so a one-shot job can run
-# `prisma migrate deploy` before the API starts.
+# Stages:
+#   build      — full (dev) install of the API subgraph + `tsc` build
+#   prod-deps  — build re-installed with production dependencies only
+#   migrator   — one-shot `prisma migrate deploy` (has the Prisma CLI)
+#   runtime    — prod-deps with the workspace tree intact; runs as `node`
+#
+# The runtime carries the built JS, the generated Prisma client, and the pruned
+# `node_modules`; the workspace TypeScript sources also ride along (they are the
+# same code — trimming them is a follow-up, tracked in docs/repository-structure.md).
 
 FROM node:22-alpine AS base
-# openssl is required by the Prisma query engine on Alpine (musl).
+# openssl is required by the Prisma engines on Alpine (musl / OpenSSL 3).
 RUN apk add --no-cache openssl
 RUN corepack enable
-ENV CI=true PNPM_HOME=/root/.local/share/pnpm
+ENV CI=true
 WORKDIR /repo
 
-# --------------------------------------------------------------------------
-# build — full (dev) install of the API subgraph, then tsc build
 # --------------------------------------------------------------------------
 FROM base AS build
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -40,42 +41,24 @@ COPY apps/api ./apps/api
 RUN pnpm --filter "@aisbp/api..." run build
 
 # --------------------------------------------------------------------------
-# prod-deps — same install pruned to production dependencies only
-# --------------------------------------------------------------------------
 FROM build AS prod-deps
 RUN pnpm install --frozen-lockfile --filter "@aisbp/api..." --prod --ignore-scripts
 
 # --------------------------------------------------------------------------
-# migrator — one-shot `prisma migrate deploy` (keeps the dev Prisma CLI).
-# Invokes the Prisma binary directly (no pnpm wrapper / workspace deps check)
-# and runs as root: it is a short-lived job that only touches the database.
-# --------------------------------------------------------------------------
+# One-shot migrator: invoke the Prisma binary directly (no pnpm wrapper, so no
+# workspace deps-status check), runs as root — a short-lived job that only
+# touches the database. Committed migrations only.
 FROM build AS migrator
 WORKDIR /repo/packages/database
 CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
 # --------------------------------------------------------------------------
-# runtime — minimal: built JS + generated client + pruned node_modules
-# --------------------------------------------------------------------------
-FROM base AS runtime
+FROM prod-deps AS runtime
 ENV NODE_ENV=production
-COPY --from=build       /repo/pnpm-workspace.yaml /repo/package.json ./
-COPY --from=prod-deps   /repo/node_modules ./node_modules
-COPY --from=prod-deps   /repo/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=prod-deps   /repo/packages/database/node_modules ./packages/database/node_modules
-COPY --from=prod-deps   /repo/apps/api/node_modules ./apps/api/node_modules
-COPY --from=build       /repo/packages/shared/package.json ./packages/shared/package.json
-COPY --from=build       /repo/packages/shared/dist ./packages/shared/dist
-COPY --from=build       /repo/packages/database/package.json ./packages/database/package.json
-COPY --from=build       /repo/packages/database/dist ./packages/database/dist
-COPY --from=build       /repo/packages/database/generated ./packages/database/generated
-COPY --from=build       /repo/apps/api/package.json ./apps/api/package.json
-COPY --from=build       /repo/apps/api/dist ./apps/api/dist
-
 USER node
 WORKDIR /repo/apps/api
 EXPOSE 4000
-# A tiny Node one-liner is the health probe — no extra tooling (curl/wget) in the image.
-HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
+# Tiny Node probe — no curl/wget added to the image.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=40s --retries=10 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 CMD ["node", "dist/server.js"]

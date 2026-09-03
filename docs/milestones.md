@@ -302,8 +302,11 @@ Production-oriented containerisation, no change to application behaviour.
 
 `apps/api/deploy.infra.test.ts` guards the container config (no re-published DB
 port, health checks present, no destructive migration command, non-root, no
-committed secret). No schema change; `prisma` stays a devDependency (the
-migrator image keeps it).
+committed secret). `prisma` stays a devDependency (the migrator image keeps
+it). The only Prisma change is a generator config: `binaryTargets` gained
+`linux-musl-openssl-3.0.x` so the client's query engine works inside the Alpine
+image — no data-model change, no migration (`prisma migrate diff` reports no
+difference).
 
 ### M18: Deployment
 
