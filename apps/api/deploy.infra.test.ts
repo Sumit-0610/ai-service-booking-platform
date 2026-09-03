@@ -82,14 +82,13 @@ describe('apps/api/Dockerfile', () => {
     expect(apiDockerfile).toMatch(/AS runtime\b/);
   });
 
-  it('runs the runtime and migrator as a non-root user', () => {
-    // Two `USER node` lines: migrator + runtime.
-    expect(apiDockerfile.match(/^USER node$/gm)?.length).toBe(2);
+  it('runs the long-lived runtime as a non-root user', () => {
+    expect(apiDockerfile).toMatch(/^USER node$/m);
   });
 
   it('starts the built production server, not a dev tool', () => {
     expect(apiDockerfile).toContain('CMD ["node", "dist/server.js"]');
-    expect(apiDockerfile).not.toMatch(/tsx|nodemon|vite|ts-node/);
+    expect(apiDockerfile).not.toMatch(/\b(tsx|nodemon|vite|ts-node)\b/);
   });
 
   it('installs openssl for the Prisma engine and has an image HEALTHCHECK', () => {
@@ -99,8 +98,8 @@ describe('apps/api/Dockerfile', () => {
   });
 
   it('applies committed migrations only', () => {
-    expect(apiDockerfile).toContain('prisma", "migrate", "deploy"');
-    expect(apiDockerfile).not.toMatch(/migrate",\s*"(reset|dev)"/);
+    expect(apiDockerfile).toMatch(/prisma\/build\/index\.js", "migrate", "deploy"/);
+    expect(apiDockerfile).not.toMatch(/"migrate",\s*"(reset|dev)"/);
     expect(apiDockerfile).not.toMatch(/prisma\s+db\s+push/);
   });
 });

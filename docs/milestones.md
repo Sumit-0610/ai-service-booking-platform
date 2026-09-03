@@ -278,8 +278,9 @@ Production-oriented containerisation, no change to application behaviour.
   install builds `@aisbp/shared` + `@aisbp/database` + the API with `tsc`, a
   second install prunes to production dependencies, and the `runtime` stage
   copies only the built JS, the generated Prisma client, and the pruned
-  `node_modules`. Runs as `node` (non-root), `CMD ["node", "dist/server.js"]`,
-  with an image `HEALTHCHECK` against `/api/v1/health`.
+  `node_modules`. The runtime runs as `node` (non-root), `CMD ["node",
+"dist/server.js"]`, with an image `HEALTHCHECK` against `/api/v1/health`. The
+  `migrator` target invokes the Prisma binary directly for `migrate deploy`.
 - **`apps/web/Dockerfile`** — builds only the web subgraph (no Prisma), then
   serves the static `dist/` from `nginxinc/nginx-unprivileged` with SPA history
   fallback (`apps/web/nginx.conf`). `VITE_API_BASE_URL` is a build arg — the

@@ -406,9 +406,10 @@ built JS, the generated Prisma client, and pruned production `node_modules` (no
 `typescript`, `tsx`, `vitest`, `supertest`, `prisma` CLI, or source tree). It
 runs as the non-root `node` user and starts `node dist/server.js` — never a dev
 watcher. The web image is `nginx-unprivileged` (uid 101, port 8080). The
-migrator image keeps the Prisma CLI but only ever runs `prisma migrate deploy`
-(committed migrations); it never resets or force-pushes the schema, and it is a
-one-shot container that exits.
+migrator image keeps the Prisma CLI and runs as root (a short-lived one-shot
+job that only touches the database), invoking the Prisma binary directly for
+`migrate deploy` — committed migrations only, never a reset or a force-push,
+and it exits when done.
 
 **Networking** — in `docker-compose.prod.yml`, PostgreSQL and Redis are on
 `expose:` only (reachable inside the compose network, never a host port). Only

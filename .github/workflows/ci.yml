@@ -152,9 +152,11 @@ jobs:
           docker compose -f docker-compose.prod.yml run --rm migrator | tee /tmp/migrate.log
           grep -q "No pending migrations to apply" /tmp/migrate.log
 
-      - name: Stack logs on failure
+      - name: Stack state and logs on failure
         if: failure()
-        run: docker compose -f docker-compose.prod.yml logs --no-color
+        run: |
+          docker compose -f docker-compose.prod.yml ps --all
+          docker compose -f docker-compose.prod.yml logs --no-color --tail 200
 
       - name: Tear down
         if: always()

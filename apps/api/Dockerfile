@@ -46,12 +46,13 @@ FROM build AS prod-deps
 RUN pnpm install --frozen-lockfile --filter "@aisbp/api..." --prod --ignore-scripts
 
 # --------------------------------------------------------------------------
-# migrator — one-shot `prisma migrate deploy` (keeps the dev Prisma CLI)
+# migrator — one-shot `prisma migrate deploy` (keeps the dev Prisma CLI).
+# Invokes the Prisma binary directly (no pnpm wrapper / workspace deps check)
+# and runs as root: it is a short-lived job that only touches the database.
 # --------------------------------------------------------------------------
 FROM build AS migrator
 WORKDIR /repo/packages/database
-USER node
-CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
+CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
 # --------------------------------------------------------------------------
 # runtime — minimal: built JS + generated client + pruned node_modules
