@@ -119,6 +119,23 @@ jobs:
           docker compose -f docker-compose.yml config --quiet
           docker compose -f docker-compose.prod.yml config --quiet
 
+      - name: Validate the deployment compose file (Milestone 18)
+        # docker-compose.deploy.yml requires its secrets (`${VAR:?...}`), so this
+        # supplies throwaway values purely to check the file parses and every
+        # service references a pullable image, not a build context.
+        env:
+          IMAGE_TAG: latest
+          POSTGRES_PASSWORD: ci-not-a-real-secret
+          DATABASE_URL: postgresql://app:ci-not-a-real-secret@postgres:5432/ai_service_booking_platform
+          REDIS_URL: redis://redis:6379
+          WEB_ORIGIN: https://ci.example.com
+        run: |
+          docker compose -f docker-compose.deploy.yml config --quiet
+          # No `build:` anywhere — the deployment stack only pulls published images.
+          if docker compose -f docker-compose.deploy.yml config | grep -qE '^\s+build:'; then
+            echo "::error::docker-compose.deploy.yml must not build images"; exit 1
+          fi
+
       - name: Build production images
         run: docker compose -f docker-compose.prod.yml build
 

@@ -5,13 +5,13 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 18: Deployment — not started.**
+**Milestone 19: README and GitHub portfolio polish — not started.**
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
 
-Milestones 1–17 are complete with CI green on `origin/main`.
+Milestones 1–18 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -313,9 +313,60 @@ One config-parsing fix went with the compose file: the optional
 forwards `${ANTHROPIC_API_KEY:-}` as `""` when the host variable is unset and
 the previous schema rejected that, exiting the API on boot.
 
-### M18: Deployment
+### M18: Deployment — complete
 
-Deployment configuration and documentation.
+Deployment configuration and documentation. No application behaviour change; no
+schema change, no migration.
+
+**Deployment decision.** M17 deferred cloud-target selection, registry
+publishing, and infrastructure-as-code. The approved docs name no cloud
+provider, orchestrator, or IaC tool, so M18 uses the smallest provider-neutral
+mechanism: **GitHub Actions → GHCR → self-hosted Docker Compose behind a
+reverse proxy.** No cloud infrastructure is provisioned, no staging environment,
+no platform-specific rollback API. Full runbook in [Deployment](deployment.md).
+
+- **`.github/workflows/release.yml`** — publishes the `api`, `migrator`, and
+  `web` images to GHCR (`ghcr.io/sumit-0610/ai-service-booking-platform-{api,migrator,web}`),
+  tagged `sha-<commit>` (always) and `latest` (main only), using the built-in
+  `GITHUB_TOKEN` + `packages: write` — no registry secret. Gated: it runs via
+  `workflow_run` only when the `CI` workflow concluded `success`, and a
+  `Require green CI for this commit` step re-verifies the commit's `validate` +
+  `docker` check-runs before any push. `workflow_dispatch` (with a
+  `web_api_base_url` input) is subject to the same gate. No `|| true`, no
+  `continue-on-error`.
+- **`docker-compose.deploy.yml`** — the deployment stack. **Pulls** the
+  published images (never builds), release selected by `${IMAGE_TAG}`. Every
+  production secret is `${VAR:?…}` (compose refuses to start without it) — no
+  localhost/dev fallback for `DATABASE_URL`, `REDIS_URL`, `WEB_ORIGIN`,
+  `POSTGRES_PASSWORD`. `NODE_ENV=production`, `COOKIE_SECURE=true`,
+  `TRUST_PROXY=true` are pinned. PostgreSQL/Redis stay on `expose:` (named
+  volumes, AOF for Redis); `api`/`web` bind to `127.0.0.1` only — the operator's
+  TLS reverse proxy is the sole public surface. `docker-compose.prod.yml` is
+  **unchanged** and remains the local build-and-run integration stack the CI
+  `docker` job uses.
+- **`.env.production.example`** — every required production variable, placeholders
+  only, committed (real `.env.production` stays git-ignored).
+- **Production fail-fast** — `apps/api/src/config/env.ts` is refactored into a
+  pure, testable `loadEnv(source)`. When `NODE_ENV=production`, a missing (or
+  empty) `WEB_ORIGIN` throws with a clear message instead of silently using the
+  `http://localhost:5173` dev default. `DATABASE_URL` / `REDIS_URL` already fail
+  fast. Local/dev behaviour is unchanged.
+- **Release observability** — `APP_VERSION` / `APP_COMMIT` / `APP_BUILD_TIME`
+  build args → OCI image labels (`org.opencontainers.image.revision` / `.version`
+  / `.created`) + API env. `GET /api/v1/health` gains an **optional** `version`
+  block (absent for an unstamped build — additive, existing consumers
+  unaffected), the web image serves `/version.txt`, and the API logs one
+  `Starting API` line with the commit. No secret in any label or log.
+- **CI** — the `docker` job gains one step that `config`-validates
+  `docker-compose.deploy.yml` (with throwaway env) and asserts it contains no
+  `build:`. The `validate` job and every existing gate are untouched.
+- **Regression tests** — `apps/api/deploy.infra.test.ts` extended (19 → 40) plus
+  `apps/api/src/config/env.test.ts` (new) for the `loadEnv` guards, and the
+  health `version` contract in `packages/shared` + `apps/api`.
+
+Rollback is documented as two distinct operations: **application rollback** =
+redeploy the previous `sha-<commit>` image; **database** = never a destructive
+reverse, always a forward corrective migration.
 
 ### M19: README and GitHub portfolio polish
 

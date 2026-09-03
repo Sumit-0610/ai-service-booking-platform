@@ -9,10 +9,26 @@ const booleanFromString = z
 const booleanFromStringWithDefault = (defaultValue: boolean) =>
   booleanFromString.default(defaultValue);
 
+/**
+ * An optional string env var where an empty string is treated as absent. Container
+ * runtimes (Docker Compose's `${VAR:-}`, Kubernetes, …) commonly forward an unset
+ * variable as `""`; without this a `.min(1)` check would reject it as invalid.
+ */
+const optionalEnvString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  WEB_ORIGIN: z.url().default('http://localhost:5173'),
+  // An empty string (a container "unset" value) collapses to the dev default so
+  // schema parsing still succeeds; the production presence check below then
+  // rejects it with a clear message rather than a generic "Invalid URL".
+  WEB_ORIGIN: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.url().default('http://localhost:5173'),
+  ),
 
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
@@ -45,13 +61,8 @@ const envSchema = z.object({
 
   // Claude AI Booking Assistant (Milestone 14). The key is server-side only and
   // optional — with no key (or AI_ASSISTANT_ENABLED=false) the assistant
-  // endpoints return a safe 503 and the rest of the API is unaffected. An empty
-  // string (a common way container runtimes pass an unset variable) is treated
-  // as absent, not as an invalid key.
-  ANTHROPIC_API_KEY: z.preprocess(
-    (value) => (value === '' ? undefined : value),
-    z.string().min(1).optional(),
-  ),
+  // endpoints return a safe 503 and the rest of the API is unaffected.
+  ANTHROPIC_API_KEY: optionalEnvString,
   ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5'),
   AI_ASSISTANT_ENABLED: booleanFromStringWithDefault(true),
   // Deterministic in-process Claude stub for E2E tests — no network call, no key.
@@ -62,19 +73,90 @@ const envSchema = z.object({
   AI_MAX_MESSAGE_CHARS: z.coerce.number().int().positive().default(2_000),
   AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   AI_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(3600),
+
+  // Deployment / release metadata (Milestone 18). Baked into the image at build
+  // time (Docker build args → env) so a running container can report exactly
+  // which commit it is. All optional — absent in local dev, present in a
+  // published image. Never secret.
+  APP_VERSION: optionalEnvString,
+  APP_COMMIT: optionalEnvString,
+  APP_BUILD_TIME: optionalEnvString,
 });
 
-const parsed = envSchema.safeParse(process.env);
-
-if (!parsed.success) {
-  throw new Error(`Invalid environment configuration: ${z.prettifyError(parsed.error)}`);
+export interface AppVersionMetadata {
+  version: string | undefined;
+  commit: string | undefined;
+  buildTime: string | undefined;
 }
 
-const isProduction = parsed.data.NODE_ENV === 'production';
+export interface LoadedEnv {
+  env: Omit<z.infer<typeof envSchema>, 'COOKIE_SECURE'> & {
+    COOKIE_SECURE: boolean;
+    isProduction: boolean;
+    isTest: boolean;
+  };
+  appVersion: AppVersionMetadata;
+  hasAppVersion: boolean;
+}
 
-export const env = {
-  ...parsed.data,
-  COOKIE_SECURE: parsed.data.COOKIE_SECURE ?? isProduction,
-  isProduction,
-  isTest: parsed.data.NODE_ENV === 'test',
-};
+/**
+ * Parse and validate configuration from an env source. Exported (rather than
+ * only run at module load) so the production guards can be tested directly with
+ * a fabricated environment.
+ */
+export function loadEnv(source: NodeJS.ProcessEnv): LoadedEnv {
+  const parsed = envSchema.safeParse(source);
+
+  if (!parsed.success) {
+    throw new Error(`Invalid environment configuration: ${z.prettifyError(parsed.error)}`);
+  }
+
+  const isProduction = parsed.data.NODE_ENV === 'production';
+
+  // Milestone 18 — production configuration must be explicit, never the local
+  // development fallback. `WEB_ORIGIN` scopes CORS and the session cookie to the
+  // browser-facing origin; silently defaulting it to `http://localhost:5173` in
+  // production would break auth against the real origin. `DATABASE_URL` /
+  // `REDIS_URL` already fail fast (no default). We enforce presence here; the
+  // scheme (HTTPS in a real deployment) is a documented operator responsibility,
+  // not enforced in code, so the local plain-HTTP integration stack still runs.
+  if (isProduction && !source.WEB_ORIGIN) {
+    throw new Error(
+      'Invalid environment configuration: WEB_ORIGIN must be set explicitly when NODE_ENV=production ' +
+        '(the browser-facing origin of the web app, e.g. https://app.example.com).',
+    );
+  }
+
+  const appVersion: AppVersionMetadata = {
+    version: parsed.data.APP_VERSION,
+    commit: parsed.data.APP_COMMIT,
+    buildTime: parsed.data.APP_BUILD_TIME,
+  };
+
+  return {
+    env: {
+      ...parsed.data,
+      COOKIE_SECURE: parsed.data.COOKIE_SECURE ?? isProduction,
+      isProduction,
+      isTest: parsed.data.NODE_ENV === 'test',
+    },
+    appVersion,
+    hasAppVersion:
+      appVersion.version !== undefined ||
+      appVersion.commit !== undefined ||
+      appVersion.buildTime !== undefined,
+  };
+}
+
+const loaded = loadEnv(process.env);
+
+export const env = loaded.env;
+
+/**
+ * Release metadata for the running image (Milestone 18). `undefined` fields mean
+ * the value was not baked in (local dev / an unstamped build).
+ */
+export const appVersion = loaded.appVersion;
+
+/** True when at least one release-metadata field is present. */
+export const hasAppVersion = loaded.hasAppVersion;

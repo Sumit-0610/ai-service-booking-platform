@@ -404,6 +404,22 @@ someone runs `db:seed` deliberately. The CI `docker` job verifies the migrator
 applied the committed migrations to a clean database and that a second run is a
 no-op.
 
+### Deployment migration & roll-forward (Milestone 18)
+
+`docker-compose.deploy.yml` uses the **published** `migrator` image
+(`ghcr.io/sumit-0610/ai-service-booking-platform-migrator:<tag>`) with the same
+one-shot `prisma migrate deploy` semantics — no schema change and no new
+migration were introduced for M18. Deployment order is: pull images → Postgres/
+Redis healthy → `migrate deploy` → API/web start → verify health. A migration
+that cannot be applied fails the migrator loudly and the API's `depends_on`
+keeps it from starting against a broken schema.
+
+Because Prisma migrations are **forward-only**, a bad release is recovered by:
+(1) redeploying the previous known-good image tag _if_ it is schema-compatible
+(**application** rollback), then (2) authoring a **new corrective migration**
+that fixes the schema going forward — never a destructive reverse of an applied
+migration. See [Deployment](deployment.md#17-database-roll-forward-strategy).
+
 ## Seed
 
 ```bash

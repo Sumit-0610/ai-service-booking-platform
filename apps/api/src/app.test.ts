@@ -20,6 +20,13 @@ describe('health endpoint', () => {
     expect(typeof response.body.timestamp).toBe('string');
   });
 
+  it('omits the version block for an unstamped build (Milestone 18)', async () => {
+    // The test process has no APP_VERSION / APP_COMMIT / APP_BUILD_TIME, so the
+    // optional block must be absent rather than present-with-nulls.
+    const response = await request(createApp()).get('/api/v1/health').expect(200);
+    expect(response.body).not.toHaveProperty('version');
+  });
+
   it('returns a consistent 404 envelope for unknown routes', async () => {
     const response = await request(createApp()).get('/api/v1/does-not-exist').expect(404);
     expect(response.body).toEqual({ error: { code: 'NOT_FOUND', message: 'Resource not found' } });

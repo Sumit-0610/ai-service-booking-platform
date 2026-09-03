@@ -76,13 +76,16 @@ ai-service-booking-platform/
   .github/
     workflows/
       ci.yml             two jobs: `validate` (M1–M16 gates) and `docker`
+      release.yml        publish versioned api/migrator/web images to GHCR (M18)
   apps/api/Dockerfile    multi-stage; targets: build, prod-deps, migrator, runtime
   apps/web/Dockerfile    web build → nginx-unprivileged static server
   apps/web/nginx.conf    SPA history fallback + asset caching
   .dockerignore
-  docker-compose.yml     dev infra — PostgreSQL + Redis only
-  docker-compose.prod.yml  full stack — postgres, redis, migrator, api, web
-  .env.example           variables read by docker-compose.prod.yml
+  docker-compose.yml       dev infra — PostgreSQL + Redis only
+  docker-compose.prod.yml  local/CI integration stack — builds api/migrator/web
+  docker-compose.deploy.yml  deployment stack — pulls published GHCR images (M18)
+  .env.example             variables read by docker-compose.prod.yml
+  .env.production.example   variables read by docker-compose.deploy.yml (M18)
   pnpm-workspace.yaml
   package.json
   README.md
@@ -156,5 +159,29 @@ image never runs `migrate reset`, `migrate dev`, or `db push`. Seeding is
 (`pnpm --filter @aisbp/database db:seed`).
 
 **Deployment boundary.** M17 produces validated build artifacts (the three
-images) and a Compose stack that runs them. It does **not** define a cloud
-target, a registry push, or infrastructure-as-code — that is Milestone 18.
+images) and a Compose stack that runs them locally. The cloud target, registry
+push, and deployment runbook are Milestone 18 (below).
+
+## Deployment (Milestone 18)
+
+Three compose files, three jobs:
+
+| File                        | Builds? | Job                                                                             |
+| --------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `docker-compose.yml`        | —       | local dev infra (PostgreSQL + Redis, host-published)                            |
+| `docker-compose.prod.yml`   | yes     | local/CI production **integration** stack — the `docker` CI job uses this       |
+| `docker-compose.deploy.yml` | **no**  | **deployment** stack — pulls the published GHCR images, `${IMAGE_TAG}`-selected |
+
+**Deployment mechanism (provider-neutral).** `.github/workflows/release.yml`
+publishes `ghcr.io/sumit-0610/ai-service-booking-platform-{api,migrator,web}`
+(tags `sha-<commit>` always, `latest` for main) using the built-in
+`GITHUB_TOKEN` — no cloud provider, no IaC, no registry secret. It is gated:
+`workflow_run` fires only on a green `CI` run and a `Require green CI` step
+re-checks the commit's check-runs before pushing. A self-hosted Docker host
+runs `docker-compose.deploy.yml` behind an operator-provided HTTPS reverse
+proxy; `api` and `web` bind to `127.0.0.1`, PostgreSQL/Redis stay on the compose
+network. Full runbook: [Deployment](deployment.md).
+
+**Release metadata.** `APP_VERSION` / `APP_COMMIT` / `APP_BUILD_TIME` build args
+become OCI image labels, the API's optional `GET /api/v1/health` `version`
+block, a `Starting API` log line, and the web image's `/version.txt`.

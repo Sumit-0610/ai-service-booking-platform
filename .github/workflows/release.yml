@@ -1,0 +1,207 @@
+name: Release
+
+# Milestone 18 — publish versioned production images to GHCR.
+#
+# Gating: an image is published ONLY for a commit whose CI (the `CI` workflow:
+# `validate` + `docker`) has fully passed.
+#   - workflow_run: fires after CI completes on `main`; the job runs only when
+#     that CI run's conclusion is `success`, and the "Require green CI" step
+#     re-checks the commit's check-runs as defence in depth.
+#   - workflow_dispatch: manual/controlled builds (e.g. a web image for a
+#     specific origin, or building a tag); the "Require green CI" step is the
+#     gate here.
+#
+# Images (GHCR, lowercase owner/repo):
+#   ghcr.io/sumit-0610/ai-service-booking-platform-api
+#   ghcr.io/sumit-0610/ai-service-booking-platform-migrator
+#   ghcr.io/sumit-0610/ai-service-booking-platform-web
+# Tags: sha-<12-char commit> always; :latest for the main branch. Every image is
+# traceable to a commit via the tag and the OCI revision label.
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch, tag, or full SHA) to build and publish'
+        required: false
+        default: 'main'
+      web_api_base_url:
+        description: 'VITE_API_BASE_URL to bake into the web image (browser-facing API origin)'
+        required: false
+        default: 'http://localhost:4000'
+      publish_latest:
+        description: 'Also move the :latest tag'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & publish images to GHCR
+    runs-on: ubuntu-latest
+    # workflow_run: only when CI itself concluded success. workflow_dispatch:
+    # always enters, then "Require green CI for this commit" is the gate.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Resolve ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.value }}
+          fetch-depth: 0
+
+      - name: Resolve build metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse HEAD)"
+          short="$(git rev-parse --short=12 HEAD)"
+          version="$(git describe --tags --always 2>/dev/null || echo "$short")"
+          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          repo="${GITHUB_REPOSITORY,,}"
+          {
+            echo "commit=$commit"
+            echo "short=$short"
+            echo "version=$version"
+            echo "build_time=$build_time"
+            echo "repo=$repo"
+          } >> "$GITHUB_OUTPUT"
+          # :latest for a main-branch workflow_run, or when the dispatch asks for it.
+          if [ "${{ github.event_name }}" = "workflow_run" ] || [ "${{ github.event.inputs.publish_latest }}" = "true" ]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require green CI for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.meta.outputs.commit }}"
+          echo "Verifying CI check-runs for $sha"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs" --paginate --slurp > checks.json
+          for required in "validate" "Docker images & stack smoke test"; do
+            conclusion="$(jq -r --arg n "$required" \
+              '[.[].check_runs[] | select(.name == $n) | .conclusion] | first // "missing"' checks.json)"
+            echo "  $required -> $conclusion"
+            if [ "$conclusion" != "success" ]; then
+              echo "::error::required CI check '$required' is '$conclusion' for $sha — release blocked"
+              exit 1
+            fi
+          done
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build & push API runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: runtime
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.repo }}-api:sha-${{ steps.meta.outputs.short }}
+            ${{ steps.meta.outputs.latest == 'true' && format('ghcr.io/{0}-api:latest', steps.meta.outputs.repo) || '' }}
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            APP_COMMIT=${{ steps.meta.outputs.commit }}
+            APP_BUILD_TIME=${{ steps.meta.outputs.build_time }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.meta.outputs.commit }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.build_time }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build & push migrator image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: migrator
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.repo }}-migrator:sha-${{ steps.meta.outputs.short }}
+            ${{ steps.meta.outputs.latest == 'true' && format('ghcr.io/{0}-migrator:latest', steps.meta.outputs.repo) || '' }}
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            APP_COMMIT=${{ steps.meta.outputs.commit }}
+            APP_BUILD_TIME=${{ steps.meta.outputs.build_time }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.meta.outputs.commit }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.build_time }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build & push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          target: runtime
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.repo }}-web:sha-${{ steps.meta.outputs.short }}
+            ${{ steps.meta.outputs.latest == 'true' && format('ghcr.io/{0}-web:latest', steps.meta.outputs.repo) || '' }}
+          build-args: |
+            VITE_API_BASE_URL=${{ github.event.inputs.web_api_base_url || 'http://localhost:4000' }}
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            APP_COMMIT=${{ steps.meta.outputs.commit }}
+            APP_BUILD_TIME=${{ steps.meta.outputs.build_time }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.meta.outputs.commit }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.build_time }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Published images"
+            echo ""
+            echo "| image | tag |"
+            echo "| ----- | --- |"
+            for name in api migrator web; do
+              echo "| \`ghcr.io/${{ steps.meta.outputs.repo }}-$name\` | \`sha-${{ steps.meta.outputs.short }}\`${{ steps.meta.outputs.latest == 'true' && ', `latest`' || '' }} |"
+            done
+            echo ""
+            echo "- commit: \`${{ steps.meta.outputs.commit }}\`"
+            echo "- version: \`${{ steps.meta.outputs.version }}\`"
+            echo "- build time: \`${{ steps.meta.outputs.build_time }}\`"
+            echo "- web \`VITE_API_BASE_URL\`: \`${{ github.event.inputs.web_api_base_url || 'http://localhost:4000' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

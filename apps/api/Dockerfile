@@ -45,16 +45,41 @@ FROM build AS prod-deps
 RUN pnpm install --frozen-lockfile --filter "@aisbp/api..." --prod --ignore-scripts
 
 # --------------------------------------------------------------------------
+# Release metadata (Milestone 18). Passed as build args by the release workflow
+# and docker-compose; surfaced as OCI image labels and (for the runtime) as env
+# the API reports on /api/v1/health. Never secret — a version, a commit SHA, a
+# timestamp.
+FROM build AS migrator
+ARG APP_VERSION=""
+ARG APP_COMMIT=""
+ARG APP_BUILD_TIME=""
+LABEL org.opencontainers.image.title="aisbp-migrator" \
+      org.opencontainers.image.description="Prisma migrate deploy one-shot for the AI Service Booking Platform" \
+      org.opencontainers.image.source="https://github.com/Sumit-0610/ai-service-booking-platform" \
+      org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.revision="$APP_COMMIT" \
+      org.opencontainers.image.created="$APP_BUILD_TIME"
 # One-shot migrator: invoke the Prisma binary directly (no pnpm wrapper, so no
 # workspace deps-status check), runs as root — a short-lived job that only
 # touches the database. Committed migrations only.
-FROM build AS migrator
 WORKDIR /repo/packages/database
 CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
 # --------------------------------------------------------------------------
 FROM prod-deps AS runtime
-ENV NODE_ENV=production
+ARG APP_VERSION=""
+ARG APP_COMMIT=""
+ARG APP_BUILD_TIME=""
+LABEL org.opencontainers.image.title="aisbp-api" \
+      org.opencontainers.image.description="AI Service Booking Platform API" \
+      org.opencontainers.image.source="https://github.com/Sumit-0610/ai-service-booking-platform" \
+      org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.revision="$APP_COMMIT" \
+      org.opencontainers.image.created="$APP_BUILD_TIME"
+ENV NODE_ENV=production \
+    APP_VERSION="$APP_VERSION" \
+    APP_COMMIT="$APP_COMMIT" \
+    APP_BUILD_TIME="$APP_BUILD_TIME"
 USER node
 WORKDIR /repo/apps/api
 EXPOSE 4000

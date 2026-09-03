@@ -430,6 +430,34 @@ No vulnerability scanner is added — the M17 specification does not call for on
 and adding one without a triage policy would be scanner noise (see the M17
 prompt §14).
 
+## Deployment Security (Milestone 18)
+
+An explicit deployment security review of the GHCR → self-hosted Compose path.
+
+| Check                                             | Result                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Production requires `WEB_ORIGIN`                  | `apps/api/src/config/env.ts` (`loadEnv`) throws when `NODE_ENV=production` and `WEB_ORIGIN` is missing or empty — CORS and cookie scope can never silently fall back to `http://localhost:5173`. `docker-compose.deploy.yml` also makes it `${WEB_ORIGIN:?…}`. Covered by `apps/api/src/config/env.test.ts`. |
+| Secure cookies                                    | `COOKIE_SECURE: 'true'` is pinned in `docker-compose.deploy.yml` (not operator-overridable there); the session + CSRF cookies are HTTPS-only.                                                                                                                                                                |
+| Proxy trust explicit                              | `TRUST_PROXY: 'true'` is pinned in the deploy compose so `req.ip` (rate limiting) and secure-cookie handling are correct behind one TLS-terminating proxy hop; `app.set('trust proxy', 1)` — a single hop, not `true`.                                                                                       |
+| Secrets are environment-supplied                  | `docker-compose.deploy.yml` uses `${VAR:?…}` for `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `WEB_ORIGIN` — compose refuses to start without them. No secret default, no dev fallback.                                                                                                                 |
+| No secret committed                               | `.env.production` is git-ignored (`.env.*`, with `!.env.example` / `!.env.production.example`) and `.dockerignore`d. `.env.production.example` is placeholders only. No secret in any Dockerfile, compose file, or workflow. Regression-tested.                                                              |
+| No secret in image labels                         | OCI labels carry only `revision` (commit), `version`, `created`, `source`, `title`, `description`. `deploy.infra.test.ts` asserts no `LABEL` line matches `SECRET`/`PASSWORD`/`TOKEN`/`KEY`.                                                                                                                 |
+| No secret in logs                                 | The startup `Starting API` line and `/api/v1/health` carry only `nodeEnv` + non-secret release metadata. The logger never receives `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, cookies, session ids, or CSRF tokens (unchanged M4/M14).                                                                |
+| PostgreSQL private                                | `expose: ['5432']` only — reachable on the compose network, never a host port. Named volume `postgres-data`.                                                                                                                                                                                                 |
+| Redis private                                     | `expose: ['6379']` only. AOF persistence + `redis-data` volume so a restart does not drop every session.                                                                                                                                                                                                     |
+| Containers run as intended users                  | `api` → `node` (non-root, from the M17 runtime stage); `web` → `nginx-unprivileged` (uid 101). `migrator` runs as root — a short-lived one-shot that only invokes the Prisma binary against the DB, then exits.                                                                                              |
+| Published images traceable to commits             | Every image is tagged `sha-<12-char commit>` and labelled `org.opencontainers.image.revision=<full sha>`. `GET /api/v1/health` → `.version.commit`; the web image serves `/version.txt`.                                                                                                                     |
+| Migration execution explicit and ordered          | The one-shot `migrator` runs `prisma migrate deploy` (committed migrations only) with `depends_on: { postgres: service_healthy }`; the API has `depends_on: { migrator: service_completed_successfully }`.                                                                                                   |
+| No destructive database reset in deployment       | `docker-compose.deploy.yml` contains no `migrate reset` / `migrate dev` / `db push` / `db:reset` (regression-tested). Rollback is application-image rollback + forward corrective migration — never a destructive reverse.                                                                                   |
+| CI failures cannot be masked to publish a release | `release.yml` runs via `workflow_run` only on `conclusion == 'success'`, **and** a `Require green CI for this commit` step re-checks the commit's `validate` + `docker` check-runs before any `docker push`. No `\|\| true`, no `continue-on-error`.                                                         |
+| No unvalidated input becomes a shell command      | `release.yml` interpolates only `github.*` context and its own computed `steps.meta.outputs.*` (commit SHA, short SHA, `git describe`, UTC timestamp, lowercased `GITHUB_REPOSITORY`); the `web_api_base_url` dispatch input is passed only as a Docker `--build-arg` value, never `eval`'d.                 |
+
+**Reverse proxy / TLS** is the operator's responsibility (documented in
+[Deployment](deployment.md#11-reverse-proxy--tls-configuration-requirements)):
+terminate HTTPS, forward `X-Forwarded-*`, route `/` and `/api` on one origin,
+and expose only port 443 publicly. `docker-compose.deploy.yml` binds `api` and
+`web` to `127.0.0.1` so they are never directly reachable from the internet.
+
 ## Error Handling (implemented)
 
 - One error envelope everywhere: `{ "error": { "code", "message", "details"? } }`.

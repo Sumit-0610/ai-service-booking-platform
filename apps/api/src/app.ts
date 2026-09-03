@@ -3,7 +3,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { env } from './config/env.js';
+import { appVersion, env, hasAppVersion } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { addressRouter } from './modules/addresses/address-routes.js';
 import { aiAssistantRouter } from './modules/ai/ai-routes.js';
@@ -45,6 +45,9 @@ export function createApp() {
       status: 'ok',
       service: 'api',
       timestamp: new Date().toISOString(),
+      // Milestone 18 — only present when the image was built with release
+      // metadata; omitted entirely for a local/unstamped build.
+      ...(hasAppVersion ? { version: appVersion } : {}),
     });
     res.status(200).json(response);
   });

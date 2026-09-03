@@ -1,10 +1,19 @@
 import { connectDatabase, disconnectDatabase } from '@aisbp/database';
 import { createApp } from './app.js';
-import { env } from './config/env.js';
+import { appVersion, env, hasAppVersion } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { connectRedis, disconnectRedis } from './lib/redis.js';
 
 async function main(): Promise<void> {
+  // Milestone 18 — one line so an operator can confirm the running release from
+  // the logs. Only non-secret release metadata; no connection strings.
+  logger.info('Starting API', {
+    nodeEnv: env.NODE_ENV,
+    version: hasAppVersion ? appVersion.version : undefined,
+    commit: hasAppVersion ? appVersion.commit : undefined,
+    buildTime: hasAppVersion ? appVersion.buildTime : undefined,
+  });
+
   await Promise.all([connectDatabase(), connectRedis()]);
 
   const app = createApp();

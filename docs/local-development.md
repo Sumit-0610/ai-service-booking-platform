@@ -38,6 +38,17 @@ To instead run the **whole platform in containers** (production images, API on
 --build`. See
 [Repository Structure](repository-structure.md#containerisation-milestone-17).
 
+There are three compose files, each with one job:
+
+| File                        | Builds? | Purpose                                                                              |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `docker-compose.yml`        | —       | local dev infra: PostgreSQL + Redis, host-published                                  |
+| `docker-compose.prod.yml`   | yes     | local/CI production **integration** stack — builds all images                        |
+| `docker-compose.deploy.yml` | no      | **deployment** stack — pulls published GHCR images (see [Deployment](deployment.md)) |
+
+`docker-compose.deploy.yml` is not for local use: it requires real production
+secrets (`${VAR:?…}`) and expects an HTTPS reverse proxy in front.
+
 ## Set Up the Database
 
 Apply migrations and load deterministic development data:

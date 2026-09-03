@@ -31,8 +31,26 @@ ARG VITE_API_BASE_URL=http://localhost:4000
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN pnpm --filter "@aisbp/web..." run build
 
+# Release metadata (Milestone 18) — a plain-text stamp served at /version.txt so
+# an operator can confirm which commit's bundle nginx is serving. Not secret.
+ARG APP_VERSION=""
+ARG APP_COMMIT=""
+ARG APP_BUILD_TIME=""
+RUN printf 'version=%s\ncommit=%s\nbuildTime=%s\napiBaseUrl=%s\n' \
+      "$APP_VERSION" "$APP_COMMIT" "$APP_BUILD_TIME" "$VITE_API_BASE_URL" \
+      > /repo/apps/web/dist/version.txt
+
 # --------------------------------------------------------------------------
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+ARG APP_VERSION=""
+ARG APP_COMMIT=""
+ARG APP_BUILD_TIME=""
+LABEL org.opencontainers.image.title="aisbp-web" \
+      org.opencontainers.image.description="AI Service Booking Platform web SPA (nginx)" \
+      org.opencontainers.image.source="https://github.com/Sumit-0610/ai-service-booking-platform" \
+      org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.revision="$APP_COMMIT" \
+      org.opencontainers.image.created="$APP_BUILD_TIME"
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080

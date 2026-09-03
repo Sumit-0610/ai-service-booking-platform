@@ -36,14 +36,27 @@ This project is a normal service booking and operations platform. AI is an addit
 - [Responsible AI-Assisted Development](docs/responsible-ai-development.md)
 - [Milestone Plan](docs/milestones.md)
 - [Local Development](docs/local-development.md)
+- [Deployment](docs/deployment.md)
 
 ## Current Status
 
-Milestone 17 (Docker and CI/CD) is complete: production-oriented, multi-stage Dockerfiles for the API (`node:22-alpine`, non-root, minimal runtime, image health check, plus a one-shot `migrator` target) and the web build (`nginx-unprivileged` serving the static SPA); `docker-compose.prod.yml` runs the full stack with service-name networking, health checks, PostgreSQL/Redis kept off host ports, and `prisma migrate deploy` (committed migrations only) gated ahead of the API. CI gained a `docker` job that builds the three images, brings the stack up with `--wait`, and asserts `/api/v1/health`, the served SPA shell, and that migrations landed on a clean database — the existing `validate` job (format, lint, typecheck, Prisma, migrate, seed, unit/integration/coverage, build, Playwright E2E) is unchanged. No schema change, no new dependency. Milestones 1–17 are complete with CI green. Payments are not implemented yet.
+Milestone 18 (Deployment) is complete: a provider-neutral deployment path — GitHub Actions publishes versioned `api` / `migrator` / `web` images to GHCR (gated on CI passing for the commit, using the built-in `GITHUB_TOKEN`), and `docker-compose.deploy.yml` runs those pulled images on a self-hosted Docker host behind an operator-provided HTTPS reverse proxy. Production configuration is explicit and fails fast (`WEB_ORIGIN` is required when `NODE_ENV=production`; secrets are `${VAR:?}` with no dev fallback; `COOKIE_SECURE` / `TRUST_PROXY` pinned on). `GET /api/v1/health` reports the running commit/version, images carry OCI revision labels, and the web image serves `/version.txt`. `docker-compose.prod.yml` is unchanged and stays the local build-and-run integration stack. No schema change, no new dependency. Milestones 1–18 are complete with CI green. Payments are not implemented yet.
 
-See [docs/testing.md](docs/testing.md) for the full test strategy and [docs/repository-structure.md](docs/repository-structure.md#containerisation-milestone-17) for the Docker layout.
+See [docs/deployment.md](docs/deployment.md) for the operator runbook, [docs/testing.md](docs/testing.md) for the test strategy, and [docs/repository-structure.md](docs/repository-structure.md#containerisation-milestone-17) for the Docker layout.
 
 See [docs/milestones.md](docs/milestones.md) for the canonical milestone plan and the current milestone.
+
+## Deploy
+
+```bash
+cp .env.production.example .env.production   # fill in real values, then chmod 600
+export IMAGE_TAG=sha-<commit>                # from the Release workflow summary
+docker compose --env-file .env.production -f docker-compose.deploy.yml pull
+docker compose --env-file .env.production -f docker-compose.deploy.yml run --rm migrator
+docker compose --env-file .env.production -f docker-compose.deploy.yml up -d
+```
+
+Full prerequisites, reverse-proxy/TLS requirements, health verification, and rollback are in [docs/deployment.md](docs/deployment.md).
 
 ## Local Validation
 
