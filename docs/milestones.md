@@ -5,13 +5,12 @@ numbering in older notes is superseded by this list.
 
 ## Current Milestone
 
-**Milestone 19: README and GitHub portfolio polish — not started.**
+**All defined milestones (1–19) are complete, with CI green on `origin/main`.**
+Milestone 19 is the final milestone in this plan — there is no Milestone 20.
 
 A milestone is not complete until the full validation suite (`format:check`,
 `lint`, `typecheck`, `test`, `build`, plus Prisma schema/migration/seed
 validation) and GitHub Actions CI are green on `origin/main`.
-
-Milestones 1–18 are complete with CI green on `origin/main`.
 
 ## Milestones
 
@@ -368,9 +367,29 @@ Rollback is documented as two distinct operations: **application rollback** =
 redeploy the previous `sha-<commit>` image; **database** = never a destructive
 reverse, always a forward corrective migration.
 
-### M19: README and GitHub portfolio polish
+### M19: README and GitHub portfolio polish — complete
 
-Final portfolio README, screenshots, and repository presentation.
+Documentation/presentation only — **no application code, schema, API, or
+deployment change**.
+
+- **`README.md`** rewritten as a technical portfolio landing page: one-paragraph
+  positioning (with an explicit "portfolio project, not a live service"
+  disclaimer), CI + Release status badges (pointing at the real
+  `ci.yml` / `release.yml` workflows), a capability table, a "key engineering
+  highlights" section (transactional booking, immutable pricing, DB-level
+  concurrency control, role-scoped workflows, the AI safety boundary, Redis as a
+  pure optimisation, the four-layer test suite, deployment artifacts), an ASCII
+  architecture diagram + monorepo package table, a verified tech-stack table
+  (versions read from the repo), core-workflow sketches, a security overview
+  (labelled an **internal** review, not a third-party audit), a testing section
+  with the current suite counts (Vitest 394 across 44 files, Playwright E2E 7),
+  an evidence-based performance section (measurements flagged as dev benchmarks,
+  not SLAs), the M18 deployment model, a verified quick-start, a development-command
+  table, a project tree, and a documentation index.
+- **`LICENSE`** added (MIT).
+- Every factual claim was audited against the repository, tests, CI, and docs;
+  nothing claims real users, payments, production usage, a third-party audit,
+  fabricated metrics, or "production-ready".
 
 ## Development Rule
 
