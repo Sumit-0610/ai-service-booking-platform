@@ -98,6 +98,18 @@ export function isCustomerCancellable(status: BookingStatus): boolean {
   return CUSTOMER_CANCELLABLE_STATUSES.includes(status);
 }
 
+/**
+ * Statuses from which a customer may move their own booking to a different
+ * slot. Narrower than the cancellable set on purpose: once a booking is
+ * `assigned` a technician is committed to it, so a time change has to go
+ * through operations rather than a self-service reschedule.
+ */
+export const CUSTOMER_RESCHEDULABLE_STATUSES: readonly BookingStatus[] = ['pending', 'confirmed'];
+
+export function isCustomerReschedulable(status: BookingStatus): boolean {
+  return CUSTOMER_RESCHEDULABLE_STATUSES.includes(status);
+}
+
 // ---------------------------------------------------------------------------
 // Request contracts
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'mcp-server'
 minimumReleaseAge: 0
 onlyBuiltDependencies:
   - esbuild
