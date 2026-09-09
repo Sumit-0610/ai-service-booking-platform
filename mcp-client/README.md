@@ -9,8 +9,10 @@ your message → Gemini → tool_use → call the MCP tool → tool_result → G
 
 Every tool call hits the real database through the MCP server. No `apps/api`.
 
-> **Status:** Week 2 scaffold. Single user, single actor (see the server's
-> caveat). Built for demoing and explaining the tool-call loop, not production.
+> **Status:** Single user, single actor (see the server's caveat). Real-API
+> verified. Week 3 added write guardrails + Redis conversation persistence — see
+> [`docs/mcp-agent-security.md`](../docs/mcp-agent-security.md) for the threat
+> model and guardrail walkthrough.
 
 ## Setup
 
@@ -29,7 +31,18 @@ export AISBP_MCP_ACTOR_EMAIL=alice@example.com  # an existing customer
 | `MCP_TRANSPORT`                         | `stdio`               | `stdio` \| `memory` \| `http`. `--stdio` / `--memory` / `--http <url>` override. |
 | `MCP_SERVER_URL`                        | —                     | Required for `http`. `--http <url>` sets it.                                     |
 | `MCP_AGENT_MAX_ITERATIONS`              | `8`                   | Hard cap on model↔tool round trips per turn.                                     |
+| `MCP_LLM_TIMEOUT_MS`                    | `60000`               | Per Gemini call. Newer flash models can be slow under load.                      |
 | `DATABASE_URL`, `AISBP_MCP_ACTOR_EMAIL` | —                     | Needed by `stdio`/`memory` (they run the server); not by `http`.                 |
+| `REDIS_URL`                             | —                     | Enables `--session` / `--new` (persistent transcript). Without it, in-memory.    |
+| `MCP_MAX_WRITES_PER_SESSION`            | `3`                   | Per-conversation cap on `createBooking` / `cancelOrReschedule`.                  |
+| `MCP_CONVERSATION_TTL_SECONDS`          | `86400`               | Sliding TTL on a persisted transcript.                                           |
+
+### Week 3 flags
+
+- `--session <id>` — resume (or start) a persistent conversation in Redis. Survives a restart; bound to `AISBP_MCP_ACTOR_EMAIL` (another customer can't resume it).
+- `--new` — start a fresh persistent session, print its id.
+- `--yes` — skip the y/N confirmation before each write tool call (the per-session cap still applies). Implied by `--scripted`.
+- `/clear` — during a chat, wipe the transcript and reset the write counter.
 
 ## Run
 

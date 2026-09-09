@@ -1,17 +1,21 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 /**
  * Startup configuration for the CLI. Mirrors `mcp-server/src/context.ts`: a
  * small local Zod schema over `process.env`, then a thin overlay of CLI flags.
  *
- * The CLI talks to the booking server over one of three transports:
- *  - `stdio` (default): spawns the built `mcp-server` as a child process,
- *  - `memory`: runs the booking server in-process (fast; used by tests),
- *  - `http`: connects to an already-running server's Streamable HTTP endpoint.
+ * Transports (`--stdio` default | `--memory` | `--http <url>`) — see
+ * `mcp/connect.ts`. `stdio`/`memory` run the booking server themselves, so they
+ * need `DATABASE_URL` + `AISBP_MCP_ACTOR_EMAIL`; `http` does not.
  *
- * `memory` and `stdio` run the booking server themselves, so they need
- * `DATABASE_URL` + `AISBP_MCP_ACTOR_EMAIL`. `http` does not — the server owns
- * identity.
+ * Conversation persistence (Week 3): `--session <id>` / `--new` store the
+ * transcript in Redis and need `REDIS_URL`. Without either, the transcript is
+ * in-memory (this run only).
+ *
+ * Write guardrails (Week 3): each `createBooking` / `cancelOrReschedule` is
+ * confirmed y/n in interactive mode (skip with `--yes`), and a per-conversation
+ * write cap (`MCP_MAX_WRITES_PER_SESSION`) always applies.
  */
 
 const envSchema = z.object({
@@ -27,6 +31,15 @@ const envSchema = z.object({
     .transform((value) => value.trim().toLowerCase())
     .optional(),
   MCP_AGENT_MAX_ITERATIONS: z.coerce.number().int().positive().max(50).default(8),
+  MCP_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  REDIS_URL: z.string().url().optional(),
+  MCP_SESSION_ID: z.string().min(1).max(200).optional(),
+  MCP_CONVERSATION_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60 * 24),
+  MCP_MAX_WRITES_PER_SESSION: z.coerce.number().int().positive().max(100).default(3),
 });
 
 export type McpTransportMode = 'stdio' | 'memory' | 'http';
@@ -40,8 +53,16 @@ export interface ClientConfig {
   databaseUrl: string | undefined;
   actorEmail: string | undefined;
   maxIterations: number;
-  /** `--scripted`: use the deterministic in-process fake LLM (no key, no network). */
+  llmTimeoutMs: number;
+  /** `--scripted`: deterministic in-process fake LLM (no key, no network). */
   scripted: boolean;
+  redisUrl: string | undefined;
+  /** Set when the transcript should be persisted; undefined = in-memory only. */
+  sessionId: string | undefined;
+  conversationTtlSeconds: number;
+  maxWritesPerSession: number;
+  /** `--yes`: skip the interactive write confirmation (cap still applies). */
+  autoApproveWrites: boolean;
 }
 
 interface Flags {
@@ -50,11 +71,13 @@ interface Flags {
   maxIterations?: number | undefined;
   model?: string | undefined;
   scripted: boolean;
+  sessionId?: string | undefined;
+  newSession: boolean;
+  autoApproveWrites: boolean;
 }
 
-/** Parse the handful of flags the CLI accepts. */
 function parseFlags(argv: string[]): Flags {
-  const flags: Flags = { scripted: false };
+  const flags: Flags = { scripted: false, newSession: false, autoApproveWrites: false };
   const args = argv.slice(2);
 
   const value = (index: number, flag: string): string => {
@@ -85,6 +108,15 @@ function parseFlags(argv: string[]): Flags {
         break;
       case '--max-iterations':
         flags.maxIterations = Number(value((i += 1), '--max-iterations'));
+        break;
+      case '--session':
+        flags.sessionId = value((i += 1), '--session');
+        break;
+      case '--new':
+        flags.newSession = true;
+        break;
+      case '--yes':
+        flags.autoApproveWrites = true;
         break;
       default:
         // Unknown args are ignored so `pnpm ... -- <flag>` passthrough is safe.
@@ -121,6 +153,15 @@ export function loadClientConfig(
     );
   }
 
+  const wantsPersistence =
+    flags.newSession || flags.sessionId !== undefined || !!env.MCP_SESSION_ID;
+  if (wantsPersistence && !env.REDIS_URL) {
+    throw new Error('conversation persistence (--session / --new) needs REDIS_URL');
+  }
+  const sessionId = wantsPersistence
+    ? (flags.sessionId ?? env.MCP_SESSION_ID ?? randomUUID())
+    : undefined;
+
   return {
     geminiApiKey: env.GEMINI_API_KEY,
     geminiModel: flags.model ?? env.GEMINI_MODEL,
@@ -130,6 +171,12 @@ export function loadClientConfig(
     databaseUrl: env.DATABASE_URL,
     actorEmail: env.AISBP_MCP_ACTOR_EMAIL,
     maxIterations,
+    llmTimeoutMs: env.MCP_LLM_TIMEOUT_MS,
     scripted: flags.scripted,
+    redisUrl: env.REDIS_URL,
+    sessionId,
+    conversationTtlSeconds: env.MCP_CONVERSATION_TTL_SECONDS,
+    maxWritesPerSession: env.MCP_MAX_WRITES_PER_SESSION,
+    autoApproveWrites: flags.autoApproveWrites,
   };
 }

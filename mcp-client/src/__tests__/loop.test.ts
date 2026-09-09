@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- fake MCP payloads */
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { describe, expect, it, vi } from 'vitest';
+import { Guardrails } from '../agent/guardrails.js';
 import { runAgentTurn } from '../agent/loop.js';
 import { SYSTEM_PROMPT } from '../agent/prompt.js';
 import { newTranscript } from '../agent/transcript.js';
@@ -19,6 +20,11 @@ function fakeMcp(overrides?: Partial<Pick<Client, 'callTool'>>): Client {
       tools: [
         { name: 'alpha', description: 'a', inputSchema: { type: 'object', properties: {} } },
         { name: 'beta', description: 'b', inputSchema: { type: 'object', properties: {} } },
+        {
+          name: 'createBooking',
+          description: 'w',
+          inputSchema: { type: 'object', properties: {} },
+        },
       ],
     })),
     callTool: vi.fn(async ({ name }: { name: string }) => ({
@@ -40,7 +46,11 @@ function fakeLlm(results: LlmGenerateResult[]): LlmClient {
 const USAGE = { inputTokens: 0, outputTokens: 0 };
 const META = { usage: USAGE, model: 'fake', latencyMs: 0 };
 
-async function run(llm: LlmClient, mcp: Client, opts?: { maxIterations?: number }) {
+async function run(
+  llm: LlmClient,
+  mcp: Client,
+  opts?: { maxIterations?: number; guardrails?: Guardrails },
+) {
   const history = newTranscript();
   const result = await runAgentTurn({
     llm,
@@ -49,6 +59,7 @@ async function run(llm: LlmClient, mcp: Client, opts?: { maxIterations?: number 
     history,
     userMessage: 'go',
     maxIterations: opts?.maxIterations ?? 8,
+    guardrails: opts?.guardrails,
   });
   return { result, history };
 }
@@ -128,5 +139,43 @@ describe('runAgentTurn', () => {
     const res = history.find((m) => m.toolResults)?.toolResults?.[0];
     expect(res?.isError).toBe(true);
     expect((res?.response as any).error.code).toBe('INTERNAL');
+  });
+
+  it('a guardrail-blocked write is fed back as FORBIDDEN and never reaches the server', async () => {
+    const mcp = fakeMcp();
+    const llm = fakeLlm([
+      {
+        kind: 'tool_calls',
+        calls: [{ id: '1', name: 'createBooking', args: { slot: 's' } }],
+        ...META,
+      },
+      { kind: 'text', text: 'ok, not booking then', ...META },
+    ]);
+    const guardrails = new Guardrails({ maxWrites: 5, confirm: async () => false });
+
+    const { result, history } = await run(llm, mcp, { guardrails });
+
+    expect(mcp.callTool).not.toHaveBeenCalled();
+    const res = history.find((m) => m.toolResults)?.toolResults?.[0];
+    expect(res?.isError).toBe(true);
+    expect((res?.response as any).error.code).toBe('FORBIDDEN');
+    expect(result.answer).toBe('ok, not booking then');
+  });
+
+  it('an approved write still reaches the server', async () => {
+    const mcp = fakeMcp();
+    const llm = fakeLlm([
+      {
+        kind: 'tool_calls',
+        calls: [{ id: '1', name: 'createBooking', args: { slot: 's' } }],
+        ...META,
+      },
+      { kind: 'text', text: 'booked', ...META },
+    ]);
+    const guardrails = new Guardrails({ maxWrites: 5, confirm: async () => true });
+
+    await run(llm, mcp, { guardrails });
+    expect(mcp.callTool).toHaveBeenCalledWith({ name: 'createBooking', arguments: { slot: 's' } });
+    expect(guardrails.writesUsed).toBe(1);
   });
 });

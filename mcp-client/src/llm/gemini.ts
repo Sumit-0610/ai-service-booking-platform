@@ -138,7 +138,7 @@ export type GenerateContent = (
 ) => Promise<GenerateContentResponse>;
 
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 function statusOf(error: unknown): number | undefined {
   const status = (error as { status?: unknown } | null)?.status;

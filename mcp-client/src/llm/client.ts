@@ -88,6 +88,8 @@ export function setLlmClientForTesting(client: LlmClient | null): void {
 export interface LlmClientConfig {
   geminiApiKey: string | undefined;
   geminiModel: string;
+  /** Per-call timeout; the newer flash models can be slow under load. */
+  llmTimeoutMs?: number;
 }
 
 /**
@@ -101,7 +103,11 @@ export function getLlmClient(config: LlmClientConfig): LlmClient | null {
   }
   if (memoized === undefined) {
     memoized = config.geminiApiKey
-      ? realGeminiClient(config.geminiApiKey, config.geminiModel)
+      ? realGeminiClient(
+          config.geminiApiKey,
+          config.geminiModel,
+          config.llmTimeoutMs ? { timeoutMs: config.llmTimeoutMs } : undefined,
+        )
       : null;
   }
   return memoized;
