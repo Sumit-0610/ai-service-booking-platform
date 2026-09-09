@@ -22,14 +22,14 @@ export DATABASE_URL=postgresql://...            # the migrated + seeded platform
 export AISBP_MCP_ACTOR_EMAIL=alice@example.com  # an existing customer
 ```
 
-| Variable                                | Default            | Notes                                                                            |
-| --------------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
-| `GEMINI_API_KEY`                        | —                  | Free-tier key. Without it the CLI exits (use `--scripted`).                      |
-| `GEMINI_MODEL`                          | `gemini-2.0-flash` | Any function-calling Gemini model. `--model` overrides.                          |
-| `MCP_TRANSPORT`                         | `stdio`            | `stdio` \| `memory` \| `http`. `--stdio` / `--memory` / `--http <url>` override. |
-| `MCP_SERVER_URL`                        | —                  | Required for `http`. `--http <url>` sets it.                                     |
-| `MCP_AGENT_MAX_ITERATIONS`              | `8`                | Hard cap on model↔tool round trips per turn.                                     |
-| `DATABASE_URL`, `AISBP_MCP_ACTOR_EMAIL` | —                  | Needed by `stdio`/`memory` (they run the server); not by `http`.                 |
+| Variable                                | Default               | Notes                                                                            |
+| --------------------------------------- | --------------------- | -------------------------------------------------------------------------------- |
+| `GEMINI_API_KEY`                        | —                     | Free-tier key. Without it the CLI exits (use `--scripted`).                      |
+| `GEMINI_MODEL`                          | `gemini-flash-latest` | Any function-calling Gemini model. `--model` overrides.                          |
+| `MCP_TRANSPORT`                         | `stdio`               | `stdio` \| `memory` \| `http`. `--stdio` / `--memory` / `--http <url>` override. |
+| `MCP_SERVER_URL`                        | —                     | Required for `http`. `--http <url>` sets it.                                     |
+| `MCP_AGENT_MAX_ITERATIONS`              | `8`                   | Hard cap on model↔tool round trips per turn.                                     |
+| `DATABASE_URL`, `AISBP_MCP_ACTOR_EMAIL` | —                     | Needed by `stdio`/`memory` (they run the server); not by `http`.                 |
 
 ## Run
 
@@ -98,9 +98,18 @@ DATABASE_URL=... pnpm --filter @aisbp/mcp-client test
 ### Real Gemini check (the one thing tests can't do)
 
 ```bash
-GEMINI_API_KEY=... DATABASE_URL=... AISBP_MCP_ACTOR_EMAIL=alice@example.com \
+GEMINI_API_KEY=... DATABASE_URL=... AISBP_MCP_ACTOR_EMAIL=bob@example.com \
   pnpm --filter @aisbp/mcp-client verify:gemini
 ```
 
 Runs one real turn against the live API and exits non-zero unless the model
 actually called `checkAvailability` against the real DB.
+
+**Verified 2026-09-09** against `gemini-3.5-flash` (a `gemini-flash-latest`
+alias): clean booking → real `pending` row; fabricated slot id → server
+`NOT_FOUND` → model recovers by re-checking availability; already-booked slot →
+`CONFLICT` → same recovery; "next Tuesday afternoon" → correct relative-date
+resolution + "no afternoon slots, here's the morning one" (it does not
+hallucinate a time-of-day parameter — there isn't one). Known rough edge: the
+model checks a date range **one day per call**, which is chatty; bump
+`MCP_AGENT_MAX_ITERATIONS` or ask for a specific date.

@@ -10,7 +10,13 @@ import {
   type Schema,
 } from '@google/genai';
 import { logger } from '../logger.js';
-import type { LlmClient, LlmGenerateRequest, LlmGenerateResult, LlmMessage } from './client.js';
+import type {
+  LlmClient,
+  LlmGenerateRequest,
+  LlmGenerateResult,
+  LlmMessage,
+  LlmToolCall,
+} from './client.js';
 import type { GeminiSchema, ToolDeclaration } from './schema.js';
 
 /**
@@ -99,7 +105,11 @@ export function toContents(history: LlmMessage[]): Content[] {
       const parts: Part[] = [];
       if (message.text) parts.push({ text: message.text });
       for (const call of message.toolCalls) {
-        parts.push({ functionCall: { id: call.id, name: call.name, args: call.args } });
+        const part: Part = { functionCall: { id: call.id, name: call.name, args: call.args } };
+        // Gemini 3.x rejects the follow-up turn unless the signature it issued
+        // is echoed back on the functionCall part.
+        if (call.providerSignature) part.thoughtSignature = call.providerSignature;
+        parts.push(part);
       }
       return { role: 'model', parts };
     }
@@ -193,16 +203,29 @@ export function geminiClientFromGenerator(
         outputTokens: usage.outputTokens,
       });
 
-      const calls = response.functionCalls ?? [];
-      const text = response.text ?? '';
-      if (calls.length > 0) {
+      // Parse candidate parts directly (rather than the `functionCalls` / `text`
+      // getters) so we can pair each `functionCall` with its `thoughtSignature`
+      // and skip the model's internal `thought` parts.
+      const parts = response.candidates?.[0]?.content?.parts ?? [];
+      const text = parts
+        .filter((p) => typeof p.text === 'string' && !p.thought)
+        .map((p) => p.text)
+        .join('')
+        .trim();
+      const fnParts = parts.filter((p) => p.functionCall);
+
+      if (fnParts.length > 0) {
         const result: LlmGenerateResult = {
           kind: 'tool_calls',
-          calls: calls.map((call, i) => ({
-            id: call.id ?? `call_${i}`,
-            name: call.name ?? '',
-            args: (call.args ?? {}) as Record<string, unknown>,
-          })),
+          calls: fnParts.map((part, i) => {
+            const call: LlmToolCall = {
+              id: part.functionCall?.id ?? `call_${i}`,
+              name: part.functionCall?.name ?? '',
+              args: (part.functionCall?.args ?? {}) as Record<string, unknown>,
+            };
+            if (part.thoughtSignature) call.providerSignature = part.thoughtSignature;
+            return call;
+          }),
           usage,
           model: resolvedModel,
           latencyMs,

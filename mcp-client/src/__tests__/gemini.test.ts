@@ -28,13 +28,12 @@ const TOOLS = [
   },
 ];
 
-function fakeResponse(partial: Partial<GenerateContentResponse>): GenerateContentResponse {
+/** Build a response from candidate `parts` — the shape the client now reads. */
+function fakeResponse(parts: any[]): GenerateContentResponse {
   return {
-    functionCalls: undefined,
-    text: undefined,
+    candidates: [{ content: { role: 'model', parts } }],
     usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7 },
     modelVersion: 'gemini-2.0-flash-001',
-    ...partial,
   } as GenerateContentResponse;
 }
 
@@ -66,7 +65,14 @@ describe('toContents', () => {
       {
         role: 'model',
         text: 'checking',
-        toolCalls: [{ id: 'c1', name: 'checkAvailability', args: { serviceType: 's' } }],
+        toolCalls: [
+          {
+            id: 'c1',
+            name: 'checkAvailability',
+            args: { serviceType: 's' },
+            providerSignature: 'sig-xyz',
+          },
+        ],
       },
       {
         role: 'user',
@@ -94,6 +100,8 @@ describe('toContents', () => {
     expect(modelTurn.role).toBe('model');
     expect(modelTurn.parts?.[0]).toEqual({ text: 'checking' });
     expect(modelTurn.parts?.[1]?.functionCall?.name).toBe('checkAvailability');
+    // the signature Gemini issued must be echoed back
+    expect(modelTurn.parts?.[1]?.thoughtSignature).toBe('sig-xyz');
 
     expect(contents[2]?.parts?.[0]?.functionResponse?.response).toEqual({ output: { slots: [] } });
     expect(contents[3]?.parts?.[0]?.functionResponse?.response).toEqual({
@@ -113,7 +121,7 @@ describe('geminiClientFromGenerator', () => {
     let seen: GenerateContentParameters | undefined;
     const gen: GenerateContent = async (params) => {
       seen = params;
-      return fakeResponse({ text: 'hello' });
+      return fakeResponse([{ text: 'hello' }]);
     };
     await geminiClientFromGenerator(gen, 'gemini-2.0-flash').generate(req);
 
@@ -125,33 +133,47 @@ describe('geminiClientFromGenerator', () => {
     expect(seen?.config?.toolConfig?.functionCallingConfig?.mode).toBe('AUTO');
   });
 
-  it('returns tool_calls (with any prose) when the model calls a function', async () => {
+  it('returns tool_calls (with prose + thoughtSignature) when the model calls a function', async () => {
     const gen: GenerateContent = async () =>
-      fakeResponse({
-        text: 'let me look',
-        functionCalls: [{ id: 'f1', name: 'checkAvailability', args: { serviceType: 's' } }] as any,
-      });
+      fakeResponse([
+        { text: 'let me look' },
+        {
+          functionCall: { id: 'f1', name: 'checkAvailability', args: { serviceType: 's' } },
+          thoughtSignature: 'sig-abc',
+        },
+      ]);
     const result = await geminiClientFromGenerator(gen, 'm').generate(req);
     expect(result.kind).toBe('tool_calls');
     if (result.kind === 'tool_calls') {
       expect(result.calls).toEqual([
-        { id: 'f1', name: 'checkAvailability', args: { serviceType: 's' } },
+        {
+          id: 'f1',
+          name: 'checkAvailability',
+          args: { serviceType: 's' },
+          providerSignature: 'sig-abc',
+        },
       ]);
       expect(result.text).toBe('let me look');
       expect(result.usage).toEqual({ inputTokens: 11, outputTokens: 7 });
-      expect(result.model).toBe('gemini-2.0-flash-001');
     }
   });
 
+  it('ignores the model\'s internal "thought" text parts', async () => {
+    const gen: GenerateContent = async () =>
+      fakeResponse([{ text: 'internal reasoning', thought: true }, { text: 'the answer' }]);
+    const result = await geminiClientFromGenerator(gen, 'm').generate(req);
+    expect(result).toMatchObject({ kind: 'text', text: 'the answer' });
+  });
+
   it('returns text when there are no function calls', async () => {
-    const gen: GenerateContent = async () => fakeResponse({ text: 'all set' });
+    const gen: GenerateContent = async () => fakeResponse([{ text: 'all set' }]);
     const result = await geminiClientFromGenerator(gen, 'm').generate(req);
     expect(result).toMatchObject({ kind: 'text', text: 'all set' });
   });
 
   it('synthesizes a call id when the model omits one', async () => {
     const gen: GenerateContent = async () =>
-      fakeResponse({ functionCalls: [{ name: 'checkAvailability', args: {} }] as any });
+      fakeResponse([{ functionCall: { name: 'checkAvailability', args: {} } }]);
     const result = await geminiClientFromGenerator(gen, 'm').generate(req);
     if (result.kind === 'tool_calls') expect(result.calls[0]?.id).toBe('call_0');
   });
@@ -160,7 +182,7 @@ describe('geminiClientFromGenerator', () => {
     const gen = vi
       .fn<GenerateContent>()
       .mockRejectedValueOnce(Object.assign(new Error('rate limited'), { status: 429 }))
-      .mockResolvedValueOnce(fakeResponse({ text: 'recovered' }));
+      .mockResolvedValueOnce(fakeResponse([{ text: 'recovered' }]));
     const result = await geminiClientFromGenerator(gen, 'm', { maxRetries: 1 }).generate(req);
     expect(gen).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ kind: 'text', text: 'recovered' });

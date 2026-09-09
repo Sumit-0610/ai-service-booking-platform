@@ -10,7 +10,7 @@
  */
 import 'dotenv/config';
 import { runAgentTurn } from '../src/agent/loop.js';
-import { SYSTEM_PROMPT } from '../src/agent/prompt.js';
+import { buildSystemPrompt } from '../src/agent/prompt.js';
 import { newTranscript, renderStep } from '../src/agent/transcript.js';
 import { loadClientConfig } from '../src/config.js';
 import { getLlmClient } from '../src/llm/client.js';
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     const result = await runAgentTurn({
       llm,
       mcp: connection.client,
-      system: SYSTEM_PROMPT,
+      system: buildSystemPrompt(),
       history,
       userMessage: PROMPT,
       maxIterations: config.maxIterations,
