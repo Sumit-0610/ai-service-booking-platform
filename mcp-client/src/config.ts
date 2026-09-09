@@ -16,7 +16,7 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
-  GEMINI_MODEL: z.string().min(1).default('gemini-2.0-flash'),
+  GEMINI_MODEL: z.string().min(1).default('gemini-flash-latest'),
   MCP_TRANSPORT: z.enum(['stdio', 'memory', 'http']).default('stdio'),
   MCP_SERVER_URL: z.string().url().optional(),
   MCP_HTTP_PORT: z.coerce.number().int().positive().default(3333),

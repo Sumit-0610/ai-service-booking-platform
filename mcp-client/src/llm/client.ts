@@ -18,6 +18,13 @@ export interface LlmToolCall {
   id: string;
   name: string;
   args: Record<string, unknown>;
+  /**
+   * Opaque, provider-specific token that must be echoed back with the call on
+   * the next turn. Gemini 3.x rejects a follow-up request whose `functionCall`
+   * parts lack the `thoughtSignature` it issued. Preserved verbatim, never
+   * inspected.
+   */
+  providerSignature?: string;
 }
 
 export interface LlmToolResult {

@@ -14,7 +14,7 @@ describe('loadClientConfig', () => {
   it('applies defaults', () => {
     const c = loadClientConfig(argv(), BASE);
     expect(c.transport).toBe('stdio');
-    expect(c.geminiModel).toBe('gemini-2.0-flash');
+    expect(c.geminiModel).toBe('gemini-flash-latest');
     expect(c.maxIterations).toBe(8);
     expect(c.actorEmail).toBe('alice@example.com'); // lowercased
     expect(c.scripted).toBe(false);
