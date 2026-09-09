@@ -391,6 +391,18 @@ deployment change**.
   nothing claims real users, payments, production usage, a third-party audit,
   fabricated metrics, or "production-ready".
 
+## Follow-on: MCP Booking Agent (post-M19)
+
+A separate four-week track on top of the finished platform, not a milestone.
+Adds `mcp-server/` (four booking tools over the Model Context Protocol) and
+`mcp-client/` (a Gemini agent that drives them in a loop), so an LLM can
+_complete_ a booking rather than only draft one (as the M14 assistant does).
+Four PRs — server + tools, Gemini client + HTTP transport, a live-run bug fix,
+then write guardrails + Redis conversation state + a threat-model doc — each
+CI-green and merged. Scope, architecture, the one honest metric, and a demo:
+**[mcp-project.md](mcp-project.md)**; security model:
+**[mcp-agent-security.md](mcp-agent-security.md)**.
+
 ## Development Rule
 
 Complete one milestone, validate it, and stop. Do not jump across multiple

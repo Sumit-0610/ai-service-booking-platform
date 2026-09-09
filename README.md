@@ -18,23 +18,26 @@ database, and every booking still goes through the normal validated workflow.
 
 ## What it does
 
-| Area                      | Capability                                                                                                    |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Service catalogue**     | Public, cached, paginated/searchable/sortable list of active categories and services                          |
-| **Availability**          | Public per-service slot lookup (bounded window, future-only) + technician self-service slot CRUD              |
-| **Pricing**               | Server-computed integer-cent quote; the client can never submit a price                                       |
-| **Addresses**             | Customer-owned address CRUD, international model, per-row ownership                                           |
-| **Booking workflow**      | Transactional creation with an **immutable price snapshot** and an initial status-history row                 |
-| **Operations dashboard**  | DB-aggregated metrics + a filterable booking queue + status triage (`confirm` / `reject` / `cancel`)          |
-| **Technician management** | Operations-managed technician profiles, service **qualifications**, and booking **assignment / reassignment** |
-| **Technician job flow**   | `assigned → in_progress → completed`, owner-scoped, state-machine-enforced                                    |
-| **Search / pagination**   | One shared list contract across every collection endpoint; deterministic, server-bounded                      |
-| **Redis caching**         | Read-through cache over the **public catalogue only** — a pure optimisation over PostgreSQL                   |
-| **AI booking assistant**  | Claude drafts a structured booking intent; the server re-grounds every field and stays authoritative          |
-| **Deployment**            | Multi-stage Docker images, a one-shot migration container, GHCR publishing, a self-hosted Compose stack       |
+| Area                      | Capability                                                                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service catalogue**     | Public, cached, paginated/searchable/sortable list of active categories and services                                                                          |
+| **Availability**          | Public per-service slot lookup (bounded window, future-only) + technician self-service slot CRUD                                                              |
+| **Pricing**               | Server-computed integer-cent quote; the client can never submit a price                                                                                       |
+| **Addresses**             | Customer-owned address CRUD, international model, per-row ownership                                                                                           |
+| **Booking workflow**      | Transactional creation with an **immutable price snapshot** and an initial status-history row                                                                 |
+| **Operations dashboard**  | DB-aggregated metrics + a filterable booking queue + status triage (`confirm` / `reject` / `cancel`)                                                          |
+| **Technician management** | Operations-managed technician profiles, service **qualifications**, and booking **assignment / reassignment**                                                 |
+| **Technician job flow**   | `assigned → in_progress → completed`, owner-scoped, state-machine-enforced                                                                                    |
+| **Search / pagination**   | One shared list contract across every collection endpoint; deterministic, server-bounded                                                                      |
+| **Redis caching**         | Read-through cache over the **public catalogue only** — a pure optimisation over PostgreSQL                                                                   |
+| **AI booking assistant**  | Claude drafts a structured booking intent; the server re-grounds every field and stays authoritative                                                          |
+| **MCP booking agent**     | An LLM agent that _completes_ a booking end to end via four MCP tools — actor-scoped, guardrailed, live-verified ([docs/mcp-project.md](docs/mcp-project.md)) |
+| **Deployment**            | Multi-stage Docker images, a one-shot migration container, GHCR publishing, a self-hosted Compose stack                                                       |
 
-Not implemented (deliberately out of MVP scope): payments, notifications,
-reviews/ratings, password reset, booking reschedule, a pricing rules engine.
+Not implemented in the **REST API** (deliberately out of MVP scope): payments,
+notifications, reviews/ratings, password reset, a pricing rules engine. Booking
+reschedule exists only through the MCP agent (`cancelOrReschedule`), not the
+REST surface.
 
 ## Key engineering highlights
 
@@ -109,6 +112,12 @@ route  →  auth / RBAC / CSRF middleware  →  controller  →  service  →  r
   is the only place the Anthropic SDK is imported.
 - Multi-record mutations always run in a `prisma.$transaction`.
 
+**A second entry point.** `mcp-server` and `mcp-client` add an LLM agent that
+completes bookings. It does **not** go through `apps/api` — `mcp-server` calls
+the same `@aisbp/database` repositories and booking transaction directly, so the
+concurrency and pricing guarantees are identical. One customer per process,
+resolved at startup. See **[docs/mcp-project.md](docs/mcp-project.md)**.
+
 **Monorepo packages** (pnpm workspace):
 
 | Package             | Responsibility                                                                                  |
@@ -119,25 +128,29 @@ route  →  auth / RBAC / CSRF middleware  →  controller  →  service  →  r
 | `packages/database` | `@aisbp/database` — Prisma schema, migrations, seed, generated client, and the repository layer |
 | `packages/shared`   | `@aisbp/shared` — cross-cutting Zod schemas and pure logic (pricing, pagination, state machine) |
 | `packages/config`   | `@aisbp/config` — shared TypeScript base config                                                 |
+| `mcp-server`        | `@aisbp/mcp-server` — MCP server exposing four booking tools (stdio + Streamable HTTP)          |
+| `mcp-client`        | `@aisbp/mcp-client` — Gemini agent CLI that drives the tools in a loop                          |
 
 Details: **[docs/architecture.md](docs/architecture.md)** ·
 **[docs/repository-structure.md](docs/repository-structure.md)** ·
-**[docs/domain-model.md](docs/domain-model.md)**
+**[docs/domain-model.md](docs/domain-model.md)** ·
+**[docs/mcp-project.md](docs/mcp-project.md)**
 
 ## Tech stack
 
-| Layer            | Choices                                                                                                              |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Frontend         | React 19, React Router 7, React Hook Form 7, Zod 4, Tailwind CSS 4, Vite 7 (auth state via React Context, not Redux) |
-| Backend          | Node.js ≥ 22.13, Express 5, TypeScript 5.9, Zod 4, Helmet 8                                                          |
-| Database         | PostgreSQL 16, Prisma 6.19                                                                                           |
-| Cache / sessions | Redis 7 via ioredis 6                                                                                                |
-| Auth             | Argon2id (`@node-rs/argon2`), server-side Redis sessions, HttpOnly cookie, CSRF synchronizer token                   |
-| AI               | Claude via `@anthropic-ai/sdk` (`claude-sonnet-5` default), behind a `ClaudeClient` interface                        |
-| Testing          | Vitest 3, React Testing Library, Playwright 1.62 (Chromium), `@vitest/coverage-v8`                                   |
-| Containers       | Docker multi-stage builds, `node:22-alpine`, `nginxinc/nginx-unprivileged`                                           |
-| CI/CD            | GitHub Actions (`validate` + `docker` jobs), GHCR image publishing                                                   |
-| Tooling          | pnpm 11 workspace, ESLint 9, Prettier 3                                                                              |
+| Layer            | Choices                                                                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend         | React 19, React Router 7, React Hook Form 7, Zod 4, Tailwind CSS 4, Vite 7 (auth state via React Context, not Redux)                                                        |
+| Backend          | Node.js ≥ 22.13, Express 5, TypeScript 5.9, Zod 4, Helmet 8                                                                                                                 |
+| Database         | PostgreSQL 16, Prisma 6.19                                                                                                                                                  |
+| Cache / sessions | Redis 7 via ioredis 6                                                                                                                                                       |
+| Auth             | Argon2id (`@node-rs/argon2`), server-side Redis sessions, HttpOnly cookie, CSRF synchronizer token                                                                          |
+| AI               | Claude via `@anthropic-ai/sdk` (`claude-sonnet-5` default) behind a `ClaudeClient` interface; the MCP agent uses Gemini via `@google/genai` behind an `LlmClient` interface |
+| MCP              | `@modelcontextprotocol/sdk` — stdio + Streamable HTTP transports, `McpServer` / `Client`                                                                                    |
+| Testing          | Vitest 3, React Testing Library, Playwright 1.62 (Chromium), `@vitest/coverage-v8`                                                                                          |
+| Containers       | Docker multi-stage builds, `node:22-alpine`, `nginxinc/nginx-unprivileged`                                                                                                  |
+| CI/CD            | GitHub Actions (`validate` + `docker` jobs), GHCR image publishing                                                                                                          |
+| Tooling          | pnpm 11 workspace, ESLint 9, Prettier 3                                                                                                                                     |
 
 ## Core workflows
 
@@ -371,22 +384,24 @@ More: **[docs/repository-structure.md](docs/repository-structure.md)**.
 
 ## Documentation
 
-| Document                                                                  | Purpose                                            |
-| ------------------------------------------------------------------------- | -------------------------------------------------- |
-| [Architecture](docs/architecture.md)                                      | System shape, layering, module boundaries          |
-| [Repository Structure](docs/repository-structure.md)                      | Codebase organisation and the compose files        |
-| [Domain Model](docs/domain-model.md)                                      | Entities, relationships, the booking state machine |
-| [Database](docs/database.md)                                              | Schema, constraints, indexes, migration decisions  |
-| [API Boundaries](docs/api.md)                                             | Every HTTP contract, error codes, list conventions |
-| [Authentication Strategy](docs/authentication.md)                         | Sessions, CSRF, RBAC middleware, rate limiting     |
-| [Security Strategy](docs/security.md)                                     | Controls per milestone + the M16 review            |
-| [AI Architecture](docs/ai-architecture.md)                                | The Claude boundary, grounding, fallback           |
-| [Testing Strategy](docs/testing.md)                                       | The four layers, fixtures, external-AI mocking     |
-| [Performance Strategy](docs/performance.md)                               | Measured query plans and deferred optimisations    |
-| [Deployment](docs/deployment.md)                                          | Operator runbook — GHCR → self-hosted Compose      |
-| [Local Development](docs/local-development.md)                            | Detailed local setup                               |
-| [Responsible AI-Assisted Development](docs/responsible-ai-development.md) | How AI assistance was used on this repo            |
-| [Milestone Plan](docs/milestones.md)                                      | The 19-milestone build history and scope           |
+| Document                                                                  | Purpose                                                                          |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [Architecture](docs/architecture.md)                                      | System shape, layering, module boundaries                                        |
+| [Repository Structure](docs/repository-structure.md)                      | Codebase organisation and the compose files                                      |
+| [Domain Model](docs/domain-model.md)                                      | Entities, relationships, the booking state machine                               |
+| [Database](docs/database.md)                                              | Schema, constraints, indexes, migration decisions                                |
+| [API Boundaries](docs/api.md)                                             | Every HTTP contract, error codes, list conventions                               |
+| [Authentication Strategy](docs/authentication.md)                         | Sessions, CSRF, RBAC middleware, rate limiting                                   |
+| [Security Strategy](docs/security.md)                                     | Controls per milestone + the M16 review                                          |
+| [AI Architecture](docs/ai-architecture.md)                                | The Claude boundary, grounding, fallback                                         |
+| [MCP Booking Agent](docs/mcp-project.md)                                  | The MCP tools + Gemini agent — diagram, metric, demo, scope                      |
+| [MCP Agent Security](docs/mcp-agent-security.md)                          | Actor scoping, guardrail layers, prompt-injection threat model, failure writeups |
+| [Testing Strategy](docs/testing.md)                                       | The four layers, fixtures, external-AI mocking                                   |
+| [Performance Strategy](docs/performance.md)                               | Measured query plans and deferred optimisations                                  |
+| [Deployment](docs/deployment.md)                                          | Operator runbook — GHCR → self-hosted Compose                                    |
+| [Local Development](docs/local-development.md)                            | Detailed local setup                                                             |
+| [Responsible AI-Assisted Development](docs/responsible-ai-development.md) | How AI assistance was used on this repo                                          |
+| [Milestone Plan](docs/milestones.md)                                      | The 19-milestone build history and scope                                         |
 
 ## Project status
 
@@ -394,8 +409,13 @@ Milestones **1–19 complete**, CI green on `main`. The build history is a
 19-milestone sequence — schema and auth, the booking domain, operations and
 technician workflows, search/pagination, Redis caching, the Claude assistant, a
 three-layer-plus-E2E test strategy, an internal security & performance review,
-containerisation, deployment, and this portfolio pass. See
+containerisation, deployment, and a portfolio pass. See
 [docs/milestones.md](docs/milestones.md).
+
+A follow-on **MCP booking agent** (four weeks, four PRs) adds an LLM agent that
+completes bookings end to end — actor-scoped, guardrailed, and verified against
+the live Gemini API. Its scope, architecture, one honest metric, and a demo are
+in **[docs/mcp-project.md](docs/mcp-project.md)**.
 
 ## License
 
