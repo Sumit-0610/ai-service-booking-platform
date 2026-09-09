@@ -8,16 +8,27 @@ it does not import or start `apps/api`.
 
 ## Identity
 
-Transport is **stdio**: the server is spawned by one client, configured by one
-operator, and acts for **one customer** for the life of the process — the same
+The server acts for **one customer** for the life of the process — the same
 model the GitHub / filesystem MCP servers use. That identity is
 `AISBP_MCP_ACTOR_EMAIL`; it is resolved against the real `User` table at
 startup, and the process refuses to start unless it names an existing
 **customer** account. Every booking tool then operates as that customer and
 cannot read or change another customer's rows.
 
-> A future milestone adds an HTTP transport with per-request tokens; the `Actor`
-> the tools depend on stays the same, so only `context.ts` changes.
+> This holds for **both** transports below, including HTTP: every HTTP request
+> acts as the one startup customer. Genuine per-request identity (a bearer
+> token resolved to an `Actor` per call) is a later milestone; the `Actor` the
+> tools depend on does not change.
+
+## Transports
+
+`MCP_TRANSPORT` selects the transport:
+
+- **`stdio`** (default) — spawned by one client over stdin/stdout.
+- **`http`** — Streamable HTTP on `MCP_HTTP_PORT` (default `3333`), path `/mcp`,
+  loopback-bound. **Stateless**: every request gets a fresh transport (the SDK's
+  required shape for stateless mode), so there is no session and independent
+  clients are fine. SSE resumability is out of scope.
 
 ## Tools
 
@@ -43,7 +54,11 @@ both come back through this one path rather than the SDK's own `-32602` string.
 # from the repo root, with a migrated + seeded database
 pnpm --filter @aisbp/mcp-server build
 DATABASE_URL=postgresql://... AISBP_MCP_ACTOR_EMAIL=alice@example.com \
-  node mcp-server/dist/index.js            # serves over stdio
+  node mcp-server/dist/index.js                          # stdio (default)
+
+MCP_TRANSPORT=http MCP_HTTP_PORT=3333 \
+  DATABASE_URL=postgresql://... AISBP_MCP_ACTOR_EMAIL=alice@example.com \
+  node mcp-server/dist/index.js                          # Streamable HTTP on :3333/mcp
 ```
 
 Register it with an MCP client (e.g. Claude Desktop):

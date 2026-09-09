@@ -2,6 +2,7 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'mcp-server'
+  - 'mcp-client'
 minimumReleaseAge: 0
 onlyBuiltDependencies:
   - esbuild
@@ -13,3 +14,5 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   prisma: true
+  '@google/genai': false
+  protobufjs: false
