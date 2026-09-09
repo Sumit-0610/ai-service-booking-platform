@@ -5,6 +5,7 @@ import {
   canActorTransition,
   createBookingSchema,
   isCustomerCancellable,
+  isCustomerReschedulable,
   isValidBookingTransition,
 } from './booking.js';
 
@@ -48,6 +49,15 @@ describe('booking state machine', () => {
     expect(isCustomerCancellable('in_progress')).toBe(false);
     expect(isCustomerCancellable('completed')).toBe(false);
     expect(isCustomerCancellable('cancelled')).toBe(false);
+  });
+
+  it('identifies customer-reschedulable statuses (narrower than cancellable)', () => {
+    expect(isCustomerReschedulable('pending')).toBe(true);
+    expect(isCustomerReschedulable('confirmed')).toBe(true);
+    // assigned is cancellable but NOT self-service reschedulable
+    expect(isCustomerCancellable('assigned')).toBe(true);
+    expect(isCustomerReschedulable('assigned')).toBe(false);
+    expect(isCustomerReschedulable('completed')).toBe(false);
   });
 
   it('covers every status value in the transition table', () => {

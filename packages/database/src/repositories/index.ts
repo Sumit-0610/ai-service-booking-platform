@@ -2,6 +2,7 @@ import { addressRepository } from './address-repository.js';
 import { availabilityRepository } from './availability-repository.js';
 import { bookingRepository } from './booking-repository.js';
 import { catalogRepository } from './catalog-repository.js';
+import { mcpRepository } from './mcp-repository.js';
 import { operationsRepository } from './operations-repository.js';
 import { technicianRepository } from './technician-repository.js';
 import { userRepository } from './user-repository.js';
@@ -15,6 +16,7 @@ export const repositories = {
   availability: availabilityRepository,
   bookings: bookingRepository,
   catalog: catalogRepository,
+  mcp: mcpRepository,
   operations: operationsRepository,
   technicians: technicianRepository,
   users: userRepository,
@@ -25,6 +27,7 @@ export {
   availabilityRepository,
   bookingRepository,
   catalogRepository,
+  mcpRepository,
   operationsRepository,
   technicianRepository,
   userRepository,
@@ -64,6 +67,13 @@ export type {
   SlotWriteInput,
   SlotWriteResult,
 } from './availability-repository.js';
+export type {
+  McpServiceRefRow,
+  McpBookableSlotRow,
+  McpAvailableSlotRow,
+  McpBookingDetailRow,
+  RescheduleBookingResult,
+} from './mcp-repository.js';
 export type {
   CatalogueCategoryRow,
   CatalogueServiceRow,
