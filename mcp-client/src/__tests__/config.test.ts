@@ -69,4 +69,24 @@ describe('loadClientConfig', () => {
   it('carries scripted through', () => {
     expect(loadClientConfig(argv('--scripted'), BASE).scripted).toBe(true);
   });
+
+  it('leaves sessionId undefined (in-memory) with no --session / --new', () => {
+    expect(loadClientConfig(argv(), BASE).sessionId).toBeUndefined();
+  });
+
+  it('rejects --session / --new without REDIS_URL', () => {
+    expect(() => loadClientConfig(argv('--session', 'abc'), BASE)).toThrow(/REDIS_URL/);
+    expect(() => loadClientConfig(argv('--new'), BASE)).toThrow(/REDIS_URL/);
+  });
+
+  it('uses the given session id when REDIS_URL is set; mints one for --new', () => {
+    const redis = { ...BASE, REDIS_URL: 'redis://localhost:6379' };
+    expect(loadClientConfig(argv('--session', 'sess-1'), redis).sessionId).toBe('sess-1');
+    expect(loadClientConfig(argv('--new'), redis).sessionId).toMatch(/[0-9a-f-]{36}/);
+  });
+
+  it('--yes sets autoApproveWrites', () => {
+    expect(loadClientConfig(argv('--yes'), BASE).autoApproveWrites).toBe(true);
+    expect(loadClientConfig(argv(), BASE).autoApproveWrites).toBe(false);
+  });
 });

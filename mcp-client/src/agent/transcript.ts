@@ -9,6 +9,7 @@ export type AgentStepEvent =
   | { type: 'model_text'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; isError: boolean; payload: unknown }
+  | { type: 'guardrail_block'; name: string; reason: string }
   | { type: 'iteration_limit'; maxIterations: number };
 
 /** One compact line per step, for the stderr trace. */
@@ -25,6 +26,8 @@ export function renderStep(event: AgentStepEvent): string {
       }
       return `  ← ${event.name} ok: ${truncate(JSON.stringify(event.payload), 140)}`;
     }
+    case 'guardrail_block':
+      return `  ⛔ ${event.name} blocked: ${event.reason}`;
     case 'iteration_limit':
       return `  ! stopped after ${event.maxIterations} steps`;
   }

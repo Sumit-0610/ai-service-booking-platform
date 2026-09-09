@@ -383,6 +383,23 @@ Invalid requests should return a consistent validation error without reaching bu
 - AI must not directly write to the database.
 - AI interaction logs must avoid raw secrets and unnecessary personal data.
 
+### MCP Booking Agent (`mcp-server/` + `mcp-client/`)
+
+An agent that _does_ have write access (bookings). Its security model —
+process-level actor scoping, the four guardrail layers, the prompt-injection
+threat model, and two documented deliberate failures — is in
+**[`docs/mcp-agent-security.md`](mcp-agent-security.md)**. Summary:
+
+- One `AISBP_MCP_ACTOR_EMAIL`, resolved to a `customer` at startup; every write
+  tool is `actor.id`-scoped server-side, so no prompt can reach another
+  customer's data (IDOR attempts → `NOT_FOUND`, tested adversarially).
+- `createBooking` / `cancelOrReschedule` are confirmed before running (skippable
+  with `--yes`; a non-TTY run without it refuses the write) and capped per
+  conversation.
+- Conversation transcripts (Redis) are actor-bound — a session id belonging to
+  another customer is rejected.
+- The Gemini key is client-side env only; no prompt or completion text is logged.
+
 ## Secret Management
 
 - `.env` files must not be committed.

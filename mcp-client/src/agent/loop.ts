@@ -1,6 +1,7 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { LlmClient, LlmMessage, LlmToolCall, LlmToolResult } from '../llm/client.js';
 import { toFunctionDeclarations } from '../llm/schema.js';
+import { permissiveGuardrails, type Guardrails } from './guardrails.js';
 import type { AgentStepEvent } from './transcript.js';
 
 /**
@@ -22,7 +23,9 @@ export interface RunAgentTurnOptions {
   history: LlmMessage[];
   userMessage: string;
   maxIterations?: number;
-  onStep?: (event: AgentStepEvent) => void;
+  /** Client-side safety checks run before each tool call. Defaults permissive. */
+  guardrails?: Guardrails | undefined;
+  onStep?: ((event: AgentStepEvent) => void) | undefined;
 }
 
 export interface RunAgentTurnResult {
@@ -53,6 +56,7 @@ function parseToolContent(content: unknown): unknown {
 export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<RunAgentTurnResult> {
   const maxIterations = opts.maxIterations ?? 8;
   const onStep = opts.onStep ?? (() => {});
+  const guardrails = opts.guardrails ?? permissiveGuardrails();
 
   const { tools } = await opts.mcp.listTools();
   const declarations = toFunctionDeclarations(tools);
@@ -84,7 +88,15 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<RunAgentT
     const toolResults: LlmToolResult[] = [];
     for (const call of result.calls) {
       onStep({ type: 'tool_call', name: call.name, args: call.args });
-      const outcome = await executeToolCall(opts.mcp, knownToolNames, call);
+
+      const decision = await guardrails.check(call);
+      const outcome = decision.allow
+        ? await executeToolCall(opts.mcp, knownToolNames, call)
+        : blockedResult(call, decision.reason);
+
+      if (!decision.allow) {
+        onStep({ type: 'guardrail_block', name: call.name, reason: decision.reason });
+      }
       onStep({
         type: 'tool_result',
         name: call.name,
@@ -100,6 +112,16 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<RunAgentT
   const answer = `I couldn't finish that within ${maxIterations} steps — please narrow the request or try again.`;
   opts.history.push({ role: 'model', text: answer });
   return { answer, iterations: maxIterations, hitLimit: true };
+}
+
+/** A guardrail refusal, shaped like a server error so the model can respond to it. */
+function blockedResult(call: LlmToolCall, reason: string): LlmToolResult {
+  return {
+    id: call.id,
+    name: call.name,
+    isError: true,
+    response: { error: { code: 'FORBIDDEN', message: reason } },
+  };
 }
 
 async function executeToolCall(
