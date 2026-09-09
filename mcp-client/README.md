@@ -84,7 +84,23 @@ API key, no network. Useful for smoke-testing a transport or demoing offline.
 DATABASE_URL=... pnpm --filter @aisbp/mcp-client test
 ```
 
-`schema.test.ts` is pure. `loop.integration.test.ts` drives the whole loop
-against the real MCP server (in-memory) + real DB with a scripted LLM and
-asserts a real `pending` booking row — **no Gemini call in CI**. Runs in CI via
-the recursive `pnpm test:coverage`.
+- `config.test.ts`, `transcript.test.ts`, `schema.test.ts` — pure.
+- `gemini.test.ts` — drives `geminiClientFromGenerator` with a **fake**
+  `generateContent`: request mapping (system / tools / AUTO), response parsing
+  (tool calls, text, usage), the retry policy, and the `output`/`error`
+  function-response convention. No network, no key.
+- `loop.test.ts` — the loop's control flow with a fake MCP client (iteration
+  cap, multi-call turns, unknown tool, transport failure).
+- `loop.integration.test.ts` — the whole loop against the **real** MCP server
+  (in-memory) + real DB with a scripted LLM; asserts a real `pending` booking
+  row. **No Gemini call in CI.** Runs via the recursive `pnpm test:coverage`.
+
+### Real Gemini check (the one thing tests can't do)
+
+```bash
+GEMINI_API_KEY=... DATABASE_URL=... AISBP_MCP_ACTOR_EMAIL=alice@example.com \
+  pnpm --filter @aisbp/mcp-client verify:gemini
+```
+
+Runs one real turn against the live API and exits non-zero unless the model
+actually called `checkAvailability` against the real DB.

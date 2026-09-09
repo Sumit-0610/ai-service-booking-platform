@@ -124,4 +124,34 @@ describe('jsonSchemaToGeminiSchema', () => {
     expect(jsonSchemaToGeminiSchema({ properties: { a: { type: 'string' } } }).type).toBe('object');
     expect(jsonSchemaToGeminiSchema({ items: { type: 'number' } }).type).toBe('array');
   });
+
+  it('resolves a local $ref against $defs', () => {
+    const result = jsonSchemaToGeminiSchema({
+      type: 'object',
+      properties: { addr: { $ref: '#/$defs/Address' } },
+      $defs: { Address: { type: 'string', description: 'a street' } },
+    });
+    expect(result.properties?.['addr']).toEqual({ type: 'string', description: 'a street' });
+  });
+
+  it('does not hang on a self-referential $ref', () => {
+    const result = jsonSchemaToGeminiSchema({
+      $ref: '#/$defs/Node',
+      $defs: { Node: { type: 'object', properties: { next: { $ref: '#/$defs/Node' } } } },
+    });
+    expect(result.type).toBe('object');
+  });
+
+  it('reduces a tuple items array to its first element', () => {
+    expect(
+      jsonSchemaToGeminiSchema({ type: 'array', items: [{ type: 'string' }, { type: 'number' }] })
+        .items,
+    ).toEqual({
+      type: 'string',
+    });
+  });
+
+  it('falls back to string for an unresolvable $ref', () => {
+    expect(jsonSchemaToGeminiSchema({ $ref: '#/$defs/Missing' })).toEqual({ type: 'string' });
+  });
 });

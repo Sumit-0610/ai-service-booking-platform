@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -10,17 +9,21 @@ import { buildServer } from './server.js';
 /**
  * Streamable HTTP transport for the booking server (Week 2).
  *
- * One `McpServer` + one `StreamableHTTPServerTransport`, every
- * `POST/GET/DELETE /mcp` handled by the SDK. The transport runs in session
- * mode: `initialize` issues an `mcp-session-id` the client echoes on every
- * later request. That is enough for one CLI; multi-client fan-out (a transport
- * per session) and SSE resumability are out of scope.
+ * **Stateless**: every `POST/GET/DELETE /mcp` gets a fresh `McpServer` +
+ * `StreamableHTTPServerTransport` (`sessionIdGenerator` absent), both torn down
+ * when the response closes. This is the SDK's required shape for stateless mode
+ * — reusing one transport across requests causes JSON-RPC id collisions
+ * (webStandardStreamableHttp.js:172) — and it removes any "one session at a
+ * time" limit: independent requests, safe for multiple clients.
+ *
+ * `buildServer` is cheap (no DB connection; `repositories` share one Prisma
+ * client for the process), so a server-per-request costs almost nothing here.
  *
  * **Single-actor.** Like the stdio entry, the whole process speaks for the one
  * customer named by `AISBP_MCP_ACTOR_EMAIL` and resolved at startup — every
  * HTTP request acts as that customer. Genuine per-request identity (a bearer
  * token resolved to an `Actor` per call) is a later milestone; the `Actor` the
- * tools take does not change.
+ * tools take does not change. The listener binds loopback by default.
  */
 
 const MCP_PATH = '/mcp';
@@ -34,13 +37,6 @@ export async function startHttpServer(
   actor: Actor,
   opts: { port: number; host?: string },
 ): Promise<HttpServerHandle> {
-  const mcpServer = buildServer(actor);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
-  // The SDK's own transport types `onclose` as `(() => void) | undefined`, which
-  // `exactOptionalPropertyTypes` rejects against the `Transport` interface's
-  // `onclose?: () => void`. The shapes are otherwise identical.
-  await mcpServer.connect(transport as Transport);
-
   const http: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname !== MCP_PATH) {
@@ -50,15 +46,36 @@ export async function startHttpServer(
       );
       return;
     }
-    void transport.handleRequest(req, res).catch((error: unknown) => {
-      logger.error('HTTP request failed', {
-        message: error instanceof Error ? error.message : String(error),
+
+    const mcpServer = buildServer(actor);
+    // Stateless: no `sessionIdGenerator`. The SDK types it as `() => string`
+    // (not `| undefined`), which `exactOptionalPropertyTypes` will not let us
+    // set to `undefined` explicitly, so we omit it — the constructor reads it
+    // as `undefined` and runs stateless.
+    const transport = new StreamableHTTPServerTransport({});
+    const cleanup = (): void => {
+      void transport.close();
+      void mcpServer.close();
+    };
+    res.on('close', cleanup);
+
+    void mcpServer
+      // `as Transport`: the SDK's own transport types `onclose` as
+      // `(() => void) | undefined`, which `exactOptionalPropertyTypes` rejects
+      // against the `Transport` interface's `onclose?: () => void`. Structurally
+      // identical; proven by the integration test.
+      .connect(transport as Transport)
+      .then(() => transport.handleRequest(req, res))
+      .catch((error: unknown) => {
+        logger.error('HTTP request failed', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        cleanup();
+        if (!res.headersSent) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: { code: 'INTERNAL', message: 'Request failed' } }));
+        }
       });
-      if (!res.headersSent) {
-        res.writeHead(500, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: { code: 'INTERNAL', message: 'Request failed' } }));
-      }
-    });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -74,10 +91,8 @@ export async function startHttpServer(
 
   return {
     port,
-    async close() {
-      await transport.close();
-      await mcpServer.close();
-      await new Promise<void>((resolve) => http.close(() => resolve()));
+    close() {
+      return new Promise<void>((resolve) => http.close(() => resolve()));
     },
   };
 }

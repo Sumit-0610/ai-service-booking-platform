@@ -133,4 +133,22 @@ describe('Streamable HTTP transport', () => {
     const res = await fetch(`http://127.0.0.1:${handle.port}/nope`);
     expect(res.status).toBe(404);
   });
+
+  it('serves a second independent client (stateless — no shared session)', async () => {
+    const second = new Client({ name: 'http-test-2', version: '0.0.0' });
+    await second.connect(
+      new StreamableHTTPClientTransport(
+        new URL(`http://127.0.0.1:${handle.port}/mcp`),
+      ) as Transport,
+    );
+    try {
+      const { tools } = await second.listTools();
+      expect(tools).toHaveLength(4);
+      // ...and the first client still works after the second connected.
+      const { tools: stillWorks } = await client.listTools();
+      expect(stillWorks).toHaveLength(4);
+    } finally {
+      await second.close();
+    }
+  });
 });

@@ -48,7 +48,15 @@ export interface LlmGenerateRequest {
 }
 
 export type LlmGenerateResult =
-  | { kind: 'tool_calls'; calls: LlmToolCall[]; usage: LlmUsage; model: string; latencyMs: number }
+  | {
+      kind: 'tool_calls';
+      calls: LlmToolCall[];
+      /** Any prose the model emitted alongside the calls (often reasoning). */
+      text?: string;
+      usage: LlmUsage;
+      model: string;
+      latencyMs: number;
+    }
   | { kind: 'text'; text: string; usage: LlmUsage; model: string; latencyMs: number };
 
 export interface LlmClient {

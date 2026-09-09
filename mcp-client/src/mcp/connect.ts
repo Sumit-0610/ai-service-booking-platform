@@ -1,5 +1,6 @@
-import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { connectDatabase, disconnectDatabase } from '@aisbp/database';
 import { resolveActor } from '@aisbp/mcp-server/context';
 import { buildServer } from '@aisbp/mcp-server/server';
@@ -115,8 +116,20 @@ async function connectHttp(opts: McpConnectionOptions): Promise<McpConnection> {
   };
 }
 
-/** `<mcp-server package dir>/dist/index.js` — the built stdio entry. */
+/**
+ * `<mcp-server package dir>/dist/index.js` — the built stdio entry. The stdio
+ * transport spawns `node <this>`, so the server must be built first; fail with
+ * a clear instruction rather than a cryptic spawn error.
+ */
 function resolveServerDistEntry(): string {
   const pkgJson = fileURLToPath(import.meta.resolve('@aisbp/mcp-server/package.json'));
-  return path.join(path.dirname(pkgJson), 'dist', 'index.js');
+  const entry = path.join(path.dirname(pkgJson), 'dist', 'index.js');
+  if (!existsSync(entry)) {
+    throw new Error(
+      `mcp-server is not built (${entry} missing). Run:\n` +
+        '  pnpm --filter @aisbp/mcp-server build\n' +
+        'or use a different transport: --memory (in-process) or --http <url>.',
+    );
+  }
+  return entry;
 }

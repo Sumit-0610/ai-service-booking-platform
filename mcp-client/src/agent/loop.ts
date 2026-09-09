@@ -73,7 +73,14 @@ export async function runAgentTurn(opts: RunAgentTurnOptions): Promise<RunAgentT
       return { answer: result.text, iterations: iteration, hitLimit: false };
     }
 
-    opts.history.push({ role: 'model', toolCalls: result.calls });
+    if (result.text) {
+      onStep({ type: 'model_text', text: result.text });
+    }
+    opts.history.push(
+      result.text
+        ? { role: 'model', text: result.text, toolCalls: result.calls }
+        : { role: 'model', toolCalls: result.calls },
+    );
     const toolResults: LlmToolResult[] = [];
     for (const call of result.calls) {
       onStep({ type: 'tool_call', name: call.name, args: call.args });

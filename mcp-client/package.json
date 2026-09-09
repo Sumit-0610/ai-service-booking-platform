@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run"
+    "test:coverage": "vitest run",
+    "verify:gemini": "tsx --conditions=development scripts/verify-gemini.ts"
   },
   "dependencies": {
     "@aisbp/database": "workspace:*",

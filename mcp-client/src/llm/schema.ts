@@ -10,14 +10,16 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
  * `generateContent` and returns only the final text — which erases exactly the
  * `tool_use -> execute -> tool_result -> model` cycle this project is meant to
  * demonstrate, and bypasses the `setLlmClientForTesting` seam (forcing a live
- * API in CI). Four hand-written tool schemas cost ~40 lines.
+ * API in CI). (There is also `FunctionDeclaration.parametersJsonSchema` for raw
+ * passthrough; the explicit conversion here is deliberate — it is the thing
+ * under test.)
  *
- * Gemini rejects JSON Schema keywords outside its subset, so we keep only
- * `type` / `description` / `properties` / `items` / `required` / `enum` /
- * `nullable`, drop `$schema` / `additionalProperties` / `$ref` / `format`
+ * We keep only `type` / `description` / `properties` / `items` / `required` /
+ * `enum` / `nullable`; drop `$schema` / `additionalProperties` / `format`
  * (except `date-time`) / `minLength` / `maxLength` / `pattern` / `minimum` /
- * `maximum` / `default`, and collapse `anyOf: [T, {type:'null'}]` (how an
- * optional Zod field can serialise) to `T` with `nullable: true`.
+ * `maximum` / `default` / `title`; resolve local `$ref` against `$defs` /
+ * `definitions`; collapse `anyOf: [T, {type:'null'}]` to `T` + `nullable`; and
+ * reduce a tuple `items: [A, B]` to `A` (Gemini has no tuple type).
  */
 
 export interface GeminiSchema {
@@ -38,6 +40,7 @@ export interface ToolDeclaration {
 }
 
 const KEPT_STRING_FORMATS = new Set(['date-time', 'enum']);
+const MAX_DEPTH = 20; // guards against a pathological $ref cycle
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -45,11 +48,24 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** Recursively sanitise one JSON Schema node into a `GeminiSchema`. */
-export function jsonSchemaToGeminiSchema(node: unknown): GeminiSchema {
+/** Follow a local `#/$defs/Name` or `#/definitions/Name` pointer. */
+function resolveRef(ref: string, defs: Record<string, unknown>): unknown {
+  const match = /^#\/(?:\$defs|definitions)\/(.+)$/.exec(ref);
+  return match ? defs[match[1] as string] : undefined;
+}
+
+function walk(node: unknown, defs: Record<string, unknown>, depth: number): GeminiSchema {
+  if (depth > MAX_DEPTH) {
+    return { type: 'string' };
+  }
   const obj = asRecord(node);
   if (!obj) {
     return { type: 'string' };
+  }
+
+  if (typeof obj['$ref'] === 'string') {
+    const target = resolveRef(obj['$ref'], defs);
+    return target === undefined ? { type: 'string' } : walk(target, defs, depth + 1);
   }
 
   // anyOf / oneOf of [T, null] -> T + nullable
@@ -58,7 +74,7 @@ export function jsonSchemaToGeminiSchema(node: unknown): GeminiSchema {
     if (Array.isArray(variants)) {
       const nonNull = variants.filter((v) => asRecord(v)?.['type'] !== 'null');
       const hasNull = variants.length !== nonNull.length;
-      const base = jsonSchemaToGeminiSchema(nonNull[0] ?? {});
+      const base = walk(nonNull[0] ?? {}, defs, depth + 1);
       if (typeof obj['description'] === 'string' && !base.description) {
         base.description = obj['description'];
       }
@@ -73,7 +89,6 @@ export function jsonSchemaToGeminiSchema(node: unknown): GeminiSchema {
   if (typeof rawType === 'string') {
     out.type = rawType;
   } else if (Array.isArray(rawType)) {
-    // ['string','null'] -> string + nullable
     const nonNull = rawType.filter((t) => t !== 'null');
     if (nonNull[0]) out.type = String(nonNull[0]);
     if (nonNull.length !== rawType.length) out.nullable = true;
@@ -91,7 +106,7 @@ export function jsonSchemaToGeminiSchema(node: unknown): GeminiSchema {
     out.type ??= 'object';
     out.properties = {};
     for (const [name, child] of Object.entries(properties)) {
-      out.properties[name] = jsonSchemaToGeminiSchema(child);
+      out.properties[name] = walk(child, defs, depth + 1);
     }
   }
   if (Array.isArray(obj['required'])) {
@@ -99,10 +114,22 @@ export function jsonSchemaToGeminiSchema(node: unknown): GeminiSchema {
   }
   if (obj['items'] !== undefined) {
     out.type ??= 'array';
-    out.items = jsonSchemaToGeminiSchema(obj['items']);
+    // Tuple `items: [A, B]` -> A. Object `items: {...}` -> itself.
+    const items = Array.isArray(obj['items']) ? obj['items'][0] : obj['items'];
+    out.items = walk(items, defs, depth + 1);
   }
 
   return out;
+}
+
+/** Recursively sanitise one JSON Schema node into a `GeminiSchema`. */
+export function jsonSchemaToGeminiSchema(node: unknown): GeminiSchema {
+  const root = asRecord(node);
+  const defs = {
+    ...(asRecord(root?.['definitions']) ?? {}),
+    ...(asRecord(root?.['$defs']) ?? {}),
+  };
+  return walk(node, defs, 0);
 }
 
 export function toFunctionDeclaration(tool: Tool): ToolDeclaration {

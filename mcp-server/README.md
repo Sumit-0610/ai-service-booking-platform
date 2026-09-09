@@ -25,10 +25,10 @@ cannot read or change another customer's rows.
 `MCP_TRANSPORT` selects the transport:
 
 - **`stdio`** (default) — spawned by one client over stdin/stdout.
-- **`http`** — Streamable HTTP on `MCP_HTTP_PORT` (default `3333`), path `/mcp`.
-  Session mode: `initialize` issues an `mcp-session-id` the client echoes back.
-  One server = one session at a time; multi-client fan-out and SSE resumability
-  are out of scope.
+- **`http`** — Streamable HTTP on `MCP_HTTP_PORT` (default `3333`), path `/mcp`,
+  loopback-bound. **Stateless**: every request gets a fresh transport (the SDK's
+  required shape for stateless mode), so there is no session and independent
+  clients are fine. SSE resumability is out of scope.
 
 ## Tools
 

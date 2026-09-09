@@ -4,6 +4,8 @@ import {
   Type,
   type Content,
   type FunctionDeclaration,
+  type GenerateContentParameters,
+  type GenerateContentResponse,
   type Part,
   type Schema,
 } from '@google/genai';
@@ -16,8 +18,16 @@ import type { GeminiSchema, ToolDeclaration } from './schema.js';
  * tier). Modelled on `realClient()` in `apps/api/src/lib/claude.ts`: one
  * `generateContent` round-trip per `generate()` call — the multi-turn loop
  * lives in `agent/loop.ts`, not here — plus safe-metadata-only logging (never
- * the prompt or the response text) and one backoff retry on 429/503.
+ * the prompt or the response text), one backoff retry on transient failures,
+ * and a per-call timeout.
+ *
+ * `geminiClientFromGenerator` takes the one function it needs
+ * (`generateContent`), so tests drive it with a fake and no network / no key.
  */
+
+// ---------------------------------------------------------------------------
+// JSON-Schema (our sanitized subset) -> Gemini `Schema`
+// ---------------------------------------------------------------------------
 
 const TYPE_BY_JSON: Record<string, Type> = {
   string: Type.STRING,
@@ -29,7 +39,7 @@ const TYPE_BY_JSON: Record<string, Type> = {
   null: Type.NULL,
 };
 
-function toGeminiSchema(node: GeminiSchema): Schema {
+export function toGeminiSchema(node: GeminiSchema): Schema {
   const out: Schema = {};
   if (node.type) out.type = TYPE_BY_JSON[node.type] ?? Type.STRING;
   if (node.description) out.description = node.description;
@@ -55,7 +65,7 @@ function toGeminiSchema(node: GeminiSchema): Schema {
   return out;
 }
 
-function toFunctionDeclaration(tool: ToolDeclaration): FunctionDeclaration {
+export function toFunctionDeclaration(tool: ToolDeclaration): FunctionDeclaration {
   return {
     name: tool.name,
     description: tool.description,
@@ -63,23 +73,35 @@ function toFunctionDeclaration(tool: ToolDeclaration): FunctionDeclaration {
   };
 }
 
-/** A function-response `response` must be a JSON object; wrap anything else. */
-function asResponseObject(value: unknown): Record<string, unknown> {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
+// ---------------------------------------------------------------------------
+// Conversation history <-> Gemini `Content[]`
+// ---------------------------------------------------------------------------
+
+/**
+ * Wrap a tool result for `functionResponse.response`, which Gemini requires to
+ * be a JSON object and reads by convention: an `output` key is the function's
+ * value, an `error` key is an error. Our error payloads are already
+ * `{ error: {...} }`, so they pass through; successes are nested under `output`.
+ */
+function toFunctionResponsePayload(response: unknown, isError: boolean): Record<string, unknown> {
+  if (isError) {
+    if (typeof response === 'object' && response !== null && 'error' in response) {
+      return response as Record<string, unknown>;
+    }
+    return { error: response };
   }
-  return { result: value };
+  return { output: response };
 }
 
-function toContents(history: LlmMessage[]): Content[] {
+export function toContents(history: LlmMessage[]): Content[] {
   return history.map((message): Content => {
     if (message.toolCalls) {
-      return {
-        role: 'model',
-        parts: message.toolCalls.map((call): Part => ({
-          functionCall: { id: call.id, name: call.name, args: call.args },
-        })),
-      };
+      const parts: Part[] = [];
+      if (message.text) parts.push({ text: message.text });
+      for (const call of message.toolCalls) {
+        parts.push({ functionCall: { id: call.id, name: call.name, args: call.args } });
+      }
+      return { role: 'model', parts };
     }
     if (message.toolResults) {
       return {
@@ -88,7 +110,7 @@ function toContents(history: LlmMessage[]): Content[] {
           functionResponse: {
             id: result.id,
             name: result.name,
-            response: asResponseObject(result.response),
+            response: toFunctionResponsePayload(result.response, result.isError),
           },
         })),
       };
@@ -97,39 +119,60 @@ function toContents(history: LlmMessage[]): Content[] {
   });
 }
 
-const RETRYABLE = new Set([429, 500, 503, 504]);
+// ---------------------------------------------------------------------------
+// The client
+// ---------------------------------------------------------------------------
+
+export type GenerateContent = (
+  params: GenerateContentParameters,
+) => Promise<GenerateContentResponse>;
+
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 function statusOf(error: unknown): number | undefined {
-  const status = (error as { status?: unknown }).status;
+  const status = (error as { status?: unknown } | null)?.status;
   return typeof status === 'number' ? status : undefined;
 }
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function realGeminiClient(apiKey: string, model: string): LlmClient {
-  const ai = new GoogleGenAI({ apiKey });
+export interface GeminiClientOptions {
+  timeoutMs?: number;
+  maxRetries?: number;
+}
+
+export function geminiClientFromGenerator(
+  generateContent: GenerateContent,
+  model: string,
+  options: GeminiClientOptions = {},
+): LlmClient {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxRetries = options.maxRetries ?? 1;
 
   return {
     async generate(req: LlmGenerateRequest): Promise<LlmGenerateResult> {
       const contents = toContents(req.history);
       const functionDeclarations = req.tools.map(toFunctionDeclaration);
-      const startedAt = Date.now();
+      const params: GenerateContentParameters = {
+        model,
+        contents,
+        config: {
+          abortSignal: AbortSignal.timeout(timeoutMs),
+          systemInstruction: req.system,
+          tools: [{ functionDeclarations }],
+          toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+        },
+      };
 
-      let response;
+      const startedAt = Date.now();
+      let response: GenerateContentResponse | undefined;
       for (let attempt = 0; ; attempt += 1) {
         try {
-          response = await ai.models.generateContent({
-            model,
-            contents,
-            config: {
-              systemInstruction: req.system,
-              tools: [{ functionDeclarations }],
-              toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-            },
-          });
+          response = await generateContent(params);
           break;
         } catch (error) {
-          if (attempt >= 1 || !RETRYABLE.has(statusOf(error) ?? 0)) {
+          if (attempt >= maxRetries || !RETRYABLE.has(statusOf(error) ?? 0)) {
             throw error;
           }
           await delay(500 * (attempt + 1));
@@ -151,8 +194,9 @@ export function realGeminiClient(apiKey: string, model: string): LlmClient {
       });
 
       const calls = response.functionCalls ?? [];
+      const text = response.text ?? '';
       if (calls.length > 0) {
-        return {
+        const result: LlmGenerateResult = {
           kind: 'tool_calls',
           calls: calls.map((call, i) => ({
             id: call.id ?? `call_${i}`,
@@ -163,9 +207,20 @@ export function realGeminiClient(apiKey: string, model: string): LlmClient {
           model: resolvedModel,
           latencyMs,
         };
+        if (text) result.text = text;
+        return result;
       }
 
-      return { kind: 'text', text: response.text ?? '', usage, model: resolvedModel, latencyMs };
+      return { kind: 'text', text, usage, model: resolvedModel, latencyMs };
     },
   };
+}
+
+export function realGeminiClient(
+  apiKey: string,
+  model: string,
+  options?: GeminiClientOptions,
+): LlmClient {
+  const ai = new GoogleGenAI({ apiKey });
+  return geminiClientFromGenerator((params) => ai.models.generateContent(params), model, options);
 }
